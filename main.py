@@ -238,7 +238,6 @@ def task_weather_dashboard():
     draw = ImageDraw.Draw(img)
 
     try:
-        # 使用 wttr.in 获取津南区详细天气
         url = "https://wttr.in/Jinnan,Tianjin?format=j1&lang=zh"
         resp = requests.get(url, timeout=15).json()
         curr = resp['current_condition'][0]
@@ -251,32 +250,38 @@ def task_weather_dashboard():
         astro = resp['weather'][0]['astronomy'][0]
         sunrise = astro['sunrise']
         sunset = astro['sunset']
-        forecasts = resp['weather'][1:4]  # 明天、后天、大后天
-
+        
+        # 今日高低温度（从 weather[0] 获取）
+        today_weather = resp['weather'][0]
+        today_high = today_weather['maxtempC']
+        today_low = today_weather['mintempC']
+        
+        # 未来三天：明天、后天、大后天（索引1,2,3），注意边界
+        forecasts = resp['weather'][1:4]  # 最多3个
+        
         # ----- 布局坐标 -----
         # 标题
         draw.text((20, 10), "津南区 | 天大北洋园", font=font_title, fill=0)
 
-        # 实时温度大数字
-        draw.text((25, 40), f"{curr_temp}°C", font=font_huge, fill=0)
-        # 天气描述
-        draw.text((25, 95), f"{weather_text}", font=font_item, fill=0)
+        # 当前温度（缩小字体）
+        draw.text((25, 40), f"{curr_temp}°C", font=ImageFont.truetype(FONT_PATH, 48), fill=0)
+        # 今日高低温度
+        draw.text((25, 85), f"{today_low}°/{today_high}°", font=font_item, fill=0)
+        # 天气描述（放在温度右侧，避免重叠）
+        draw.text((130, 55), f"{weather_text}", font=font_title, fill=0)
 
         # 右侧信息卡片（扩大尺寸）
         draw.rounded_rectangle([(210, 35), (390, 120)], radius=8, outline=0, fill=0)
-        # 湿度
         draw.text((220, 45), f"💧 湿度 {humidity}%", font=font_small, fill=255)
-        # 风速（显示级数）
         draw.text((220, 70), f"🌬️ 风速 {wind_scale}级", font=font_small, fill=255)
-        # 紫外线
         draw.text((220, 95), f"☀️ 紫外线 {uv_index}", font=font_small, fill=255)
 
         # 日出日落
-        draw.text((25, 135), f"🌅 日出 {sunrise}   🌇 日落 {sunset}", font=font_small, fill=0)
+        draw.text((25, 125), f"🌅 日出 {sunrise}   🌇 日落 {sunset}", font=font_small, fill=0)
 
-        # 未来三天预报（横向均匀分布）
-        draw.line([(20, 160), (380, 160)], fill=0, width=1)
-        draw.text((20, 168), "未来三天", font=font_small, fill=0)
+        # 未来三天预报（横向均匀分布，确保三个都显示）
+        draw.line([(20, 150), (380, 150)], fill=0, width=1)
+        draw.text((20, 158), "未来三天", font=font_small, fill=0)
         # 三天坐标：x = 30, 145, 260
         x_positions = [30, 145, 260]
         for i, day in enumerate(forecasts):
@@ -286,17 +291,16 @@ def task_weather_dashboard():
             low = day['mintempC']
             # 取中午12点的天气描述（3个汉字以内）
             weather_desc = day['hourly'][4]['lang_zh'][0]['value'][:3]
-            draw.text((x, 185), f"{date_str}", font=font_small, fill=0)
-            draw.text((x, 205), f"{weather_desc}", font=font_tiny, fill=0)
-            draw.text((x, 220), f"{low}°~{high}°", font=font_tiny, fill=0)
+            draw.text((x, 178), f"{date_str}", font=font_small, fill=0)
+            draw.text((x, 198), f"{weather_desc}", font=font_tiny, fill=0)
+            draw.text((x, 213), f"{low}°~{high}°", font=font_tiny, fill=0)
 
-        # 穿衣建议（下移）
+        # 穿衣建议（上移，填充底部）
         advice = get_clothing_advice(curr_temp)
-        draw.line([(20, 245), (380, 245)], fill=0, width=1)
-        # 自动换行处理（最多两行，每行19字）
+        draw.line([(20, 240), (380, 240)], fill=0, width=1)
         advice_lines = [advice[i:i+19] for i in range(0, len(advice), 19)]
         for i, line in enumerate(advice_lines[:2]):
-            draw.text((20, 255 + i*18), f"👕 {line}", font=font_tiny, fill=0)
+            draw.text((20, 250 + i*18), f"👕 {line}", font=font_tiny, fill=0)
 
     except Exception as e:
         print(f"天气获取异常: {e}")
