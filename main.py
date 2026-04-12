@@ -222,6 +222,13 @@ def task_weather_dashboard():
     img = Image.new('1', (400, 300), color=255)
     draw = ImageDraw.Draw(img)
 
+    # 内部函数：偏移加粗（用于白底黑字的小字体）
+    def draw_bold_text(draw, xy, text, font, fill=0, offset=1):
+        """通过两次绘制（水平偏移1像素）模拟加粗"""
+        x, y = xy
+        draw.text((x, y), text, font=font, fill=fill)
+        draw.text((x + offset, y), text, font=font, fill=fill)
+
     try:
         url = "https://wttr.in/Jinnan,Tianjin?format=j1&lang=zh"
         resp = requests.get(url, timeout=15).json()
@@ -247,35 +254,31 @@ def task_weather_dashboard():
         now_beijing = now_utc + timedelta(hours=8)
         update_time = now_beijing.strftime("%H:%M")
         
-        # 标题行：左侧地点，右侧更新时间
+        # 标题行（不需要加粗）
         draw.text((20, 10), "津南区 | 天大北洋园", font=font_title, fill=0)
         time_text = f"更新: {update_time}"
-        # 计算文本宽度实现右对齐
         try:
             bbox = draw.textbbox((0, 0), time_text, font=font_small)
             time_width = bbox[2] - bbox[0]
         except:
-            # 回退：粗略估算（每个字符约8px）
             time_width = len(time_text) * 8
         draw.text((390 - time_width, 12), time_text, font=font_small, fill=0)
 
-        # 当前温度（48px）
+        # 当前温度（48px，大字体本身较粗，不加粗）
         draw.text((25, 40), f"{curr_temp}°C", font=font_48, fill=0)
-        # 今日高低温度
         draw.text((25, 100), f"{today_low}°/{today_high}°", font=font_item, fill=0)
-        # 天气描述（36px）
         draw.text((150, 45), f"{weather_text}", font=font_36, fill=0)
 
-        # 右侧卡片（下移10px：原 y=35 -> y=45，内部文字对应下移）
+        # 右侧卡片（黑底白字，对比度足够，不加粗）
         draw.rounded_rectangle([(235, 45), (385, 130)], radius=8, outline=0, fill=0)
         draw.text((245, 55), f"[湿] {humidity}%", font=font_small, fill=255)
         draw.text((245, 80), f"[风] {wind_scale}级", font=font_small, fill=255)
         draw.text((245, 105), f"☀️ 紫外线 {uv_index}", font=font_small, fill=255)
 
-        # 日出日落（18px）
-        draw.text((25, 135), f"日出 {sunrise}   日落 {sunset}", font=font_item, fill=0)
+        # 日出日落（加粗）
+        draw_bold_text(draw, (25, 135), f"日出 {sunrise}   日落 {sunset}", font=font_item)
 
-        # 未来两天预报
+        # 未来两天预报（全部加粗）
         draw.line([(20, 160), (380, 160)], fill=0, width=1)
         x_positions = [30, 200]
         for i, day in enumerate(forecasts):
@@ -284,23 +287,22 @@ def task_weather_dashboard():
             high = day['maxtempC']
             low = day['mintempC']
             weather_desc = day['hourly'][4]['lang_zh'][0]['value']
-            draw.text((x, 175), f"{date_str}", font=font_item, fill=0)
-            draw.text((x, 200), f"{weather_desc}", font=font_item, fill=0)
-            draw.text((x, 220), f"{low}°~{high}°", font=font_item, fill=0)
+            draw_bold_text(draw, (x, 175), date_str, font=font_item)
+            draw_bold_text(draw, (x, 200), weather_desc, font=font_item)
+            draw_bold_text(draw, (x, 220), f"{low}°~{high}°", font=font_item)
 
-        # 穿衣建议
+        # 穿衣建议（加粗）
         advice = get_clothing_advice(curr_temp)
         draw.line([(20, 250), (380, 250)], fill=0, width=1)
         advice_lines = [advice[i:i+18] for i in range(0, len(advice), 18)]
         for i, line in enumerate(advice_lines[:2]):
-            draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
+            draw_bold_text(draw, (20, 262 + i*24), f"[衣] {line}", font=font_item)
 
     except Exception as e:
         print(f"天气获取异常: {e}")
         draw.text((20, 50), "天气数据获取失败，请检查网络", font=font_item, fill=0)
 
     push_image(img, 4)
-
 # ================= 主程序 =================
 if __name__ == "__main__":
     if not API_KEY or not MAC_ADDRESS:
