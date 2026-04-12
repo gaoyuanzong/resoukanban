@@ -13,11 +13,12 @@ PUSH_URL = f"https://cloud.zectrix.com/open/v1/devices/{MAC_ADDRESS}/display/ima
 # 字体加载
 FONT_PATH = "font.ttf"
 try:
-    font_huge = ImageFont.truetype(FONT_PATH, 65)   # 实时气温/月份大字
+    font_huge = ImageFont.truetype(FONT_PATH, 65)   # 月份大字/实时气温
     font_title = ImageFont.truetype(FONT_PATH, 24)  # 标题栏
     font_item = ImageFont.truetype(FONT_PATH, 18)   # 正文/阳历/建议
-    font_small = ImageFont.truetype(FONT_PATH, 14)  # 序号/星期
-    font_tiny = ImageFont.truetype(FONT_PATH, 11)   # 农历/预报细节
+    font_small = ImageFont.truetype(FONT_PATH, 14)  # 序号/星期/辅助信息
+    font_tiny = ImageFont.truetype(FONT_PATH, 11)   # 农历/细节
+    font_48 = ImageFont.truetype(FONT_PATH, 48)     # 当前温度专用
 except:
     print("错误: 找不到 font.ttf，请确保字体文件在同一目录下")
     exit(1)
@@ -46,7 +47,7 @@ def get_clothing_advice(temp):
     except:
         return "请根据实际体感气温调整着装。"
 
-# ================= 增强的农历/节日函数 =================
+# ================= 精确节气与农历节日 =================
 def get_solar_term(year, month, day):
     """精确节气判断（2024-2027年）"""
     term_table = {
@@ -74,13 +75,12 @@ def get_solar_term(year, month, day):
     return term_table.get((year, month, day), None)
 
 def get_lunar_or_festival(y, m, d):
-    """返回日历下方应显示的文字：节气 > 公历节日 > 农历节日 > 农历日期"""
-    # 1. 节气
+    """返回日历下方文字：节气 > 公历节日 > 农历节日 > 农历日期"""
+    # 节气
     term = get_solar_term(y, m, d)
     if term:
         return term
-    
-    # 2. 公历节日（扩充了愚人节等）
+    # 公历节日
     solar_fests = {
         (1,1):"元旦", (2,14):"情人节", (3,8):"妇女节", (4,1):"愚人节",
         (5,1):"劳动节", (6,1):"儿童节", (7,1):"建党节", (8,1):"建军节",
@@ -88,11 +88,9 @@ def get_lunar_or_festival(y, m, d):
     }
     if (m, d) in solar_fests:
         return solar_fests[(m, d)]
-    
-    # 3. 农历及农历节日
+    # 农历
     try:
-        date_obj = datetime(y, m, d)
-        lunar = ZhDate.from_datetime(date_obj)
+        lunar = ZhDate.from_datetime(datetime(y, m, d))
         lm, ld = lunar.lunar_month, lunar.lunar_day
         lunar_fests = {
             (1,1):"春节", (1,15):"元宵节", (5,5):"端午节",
@@ -100,14 +98,12 @@ def get_lunar_or_festival(y, m, d):
         }
         if (lm, ld) in lunar_fests:
             return lunar_fests[(lm, ld)]
-        
-        # 普通农历日期（如“初八”、“十五”）
         days = ["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十",
                 "十一","十二","十三","十四","十五","十六","十七","十八","十九","二十",
                 "廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"]
         months = ["正月","二月","三月","四月","五月","六月","七月","八月","九月","十月","冬月","腊月"]
         if ld == 1:
-            return months[lm-1]  # 初一显示月份
+            return months[lm-1]
         return days[ld-1]
     except:
         return ""
@@ -124,7 +120,7 @@ def push_image(img, page_id):
     except Exception as e:
         print(f"Page {page_id} 推送失败: {e}")
 
-# ================= 页面 1 & 2: 知乎热榜 =================
+# ================= 页面 1 & 2: 知乎热榜（符号替换） =================
 def task_zhihu():
     print("获取知乎热榜...")
     try:
@@ -161,14 +157,14 @@ def task_zhihu():
         return last_idx
 
     img1 = Image.new('1', (400, 300), color=255)
-    next_s = draw_list(ImageDraw.Draw(img1), "🔥 知乎热榜 (一)", titles, 0)
+    next_s = draw_list(ImageDraw.Draw(img1), "◆ 知乎热榜 (一)", titles, 0)
     push_image(img1, 1)
 
     img2 = Image.new('1', (400, 300), color=255)
-    draw_list(ImageDraw.Draw(img2), "🔥 知乎热榜 (二)", titles, next_s)
+    draw_list(ImageDraw.Draw(img2), "◆ 知乎热榜 (二)", titles, next_s)
     push_image(img2, 2)
 
-# ================= 页面 3: 实体台历（改进后） =================
+# ================= 页面 3: 日历 =================
 def task_calendar():
     print("生成 Page 3: 实体台历...")
     img = Image.new('1', (400, 300), color=255)
@@ -197,12 +193,9 @@ def task_calendar():
                 dx = 25 + c * col_w
                 if day == today:
                     draw.rounded_rectangle([(dx-3, curr_y-2), (dx+35, curr_y+32)], radius=5, outline=0)
-                # 阳历数字
                 draw.text((dx+2, curr_y), str(day), font=font_item, fill=0)
-                # 下方文字（节气/节日/农历）
                 bottom_text = get_lunar_or_festival(y, m, day)
                 if bottom_text:
-                    # 如果文字太长，缩小字体
                     if len(bottom_text) > 3:
                         try:
                             font_smaller = ImageFont.truetype(FONT_PATH, 10)
@@ -215,9 +208,8 @@ def task_calendar():
 
     push_image(img, 3)
 
-# ================= 页面 4: 气象仪表盘（优化布局，内容更丰富） =================
+# ================= 风速转换 =================
 def kmph_to_wind_scale(kmph):
-    """将风速(km/h)转换为风级（0-12级）"""
     if kmph < 1: return 0
     elif kmph <= 5: return 1
     elif kmph <= 11: return 2
@@ -232,6 +224,7 @@ def kmph_to_wind_scale(kmph):
     elif kmph <= 117: return 11
     else: return 12
 
+# ================= 页面 4: 天气看板（符号优化） =================
 def task_weather_dashboard():
     print("生成 Page 4: 气象仪表盘 (津南)...")
     img = Image.new('1', (400, 300), color=255)
@@ -251,69 +244,65 @@ def task_weather_dashboard():
         sunrise = astro['sunrise']
         sunset = astro['sunset']
         
-        # 今日高低温度（从 weather[0] 获取）
         today_weather = resp['weather'][0]
         today_high = today_weather['maxtempC']
         today_low = today_weather['mintempC']
         
-        # 未来三天：明天、后天、大后天（索引1,2,3），注意边界
-        forecasts = resp['weather'][1:4]  # 最多3个
+        # 未来两天：明天、后天
+        forecasts = resp['weather'][1:3]
         
-        # ----- 布局坐标 -----
         # 标题
         draw.text((20, 10), "津南区 | 天大北洋园", font=font_title, fill=0)
 
-        # 当前温度（缩小字体）
-        draw.text((25, 40), f"{curr_temp}°C", font=ImageFont.truetype(FONT_PATH, 48), fill=0)
+        # 当前温度（48px）
+        draw.text((25, 40), f"{curr_temp}°C", font=font_48, fill=0)
         # 今日高低温度
-        draw.text((25, 85), f"{today_low}°/{today_high}°", font=font_item, fill=0)
-        # 天气描述（放在温度右侧，避免重叠）
-        draw.text((130, 55), f"{weather_text}", font=font_title, fill=0)
+        draw.text((25, 100), f"{today_low}°/{today_high}°", font=font_item, fill=0)
+        # 天气描述（48px，右移）
+        draw.text((150, 40), f"{weather_text}", font=font_48, fill=0)
 
-        # 右侧信息卡片（扩大尺寸）
+        # 右侧卡片（符号替换为文字）
         draw.rounded_rectangle([(210, 35), (390, 120)], radius=8, outline=0, fill=0)
-        draw.text((220, 45), f"💧 湿度 {humidity}%", font=font_small, fill=255)
-        draw.text((220, 70), f"🌬️ 风速 {wind_scale}级", font=font_small, fill=255)
-        draw.text((220, 95), f"☀️ 紫外线 {uv_index}", font=font_small, fill=255)
+        draw.text((220, 45), f"湿度: {humidity}%", font=font_small, fill=255)
+        draw.text((220, 70), f"风速: {wind_scale}级", font=font_small, fill=255)
+        draw.text((220, 95), f"☀️ 紫外线 {uv_index}", font=font_small, fill=255)  # ☀️可显示
 
-        # 日出日落
-        draw.text((25, 125), f"🌅 日出 {sunrise}   🌇 日落 {sunset}", font=font_small, fill=0)
+        # 日出日落（文字替换符号）
+        draw.text((25, 135), f"日出 {sunrise}   日落 {sunset}", font=font_small, fill=0)
 
-        # 未来三天预报（横向均匀分布，确保三个都显示）
-        draw.line([(20, 150), (380, 150)], fill=0, width=1)
-        draw.text((20, 158), "未来三天", font=font_small, fill=0)
-        # 三天坐标：x = 30, 145, 260
-        x_positions = [30, 145, 260]
+        # 未来两天预报（无标题）
+        draw.line([(20, 160), (380, 160)], fill=0, width=1)
+        x_positions = [30, 200]
         for i, day in enumerate(forecasts):
             x = x_positions[i]
-            date_str = day['date'][5:]  # MM-DD
+            date_str = day['date'][5:]
             high = day['maxtempC']
             low = day['mintempC']
-            # 取中午12点的天气描述（3个汉字以内）
             weather_desc = day['hourly'][4]['lang_zh'][0]['value'][:3]
-            draw.text((x, 178), f"{date_str}", font=font_small, fill=0)
-            draw.text((x, 198), f"{weather_desc}", font=font_tiny, fill=0)
-            draw.text((x, 213), f"{low}°~{high}°", font=font_tiny, fill=0)
+            draw.text((x, 175), f"{date_str}", font=font_item, fill=0)
+            draw.text((x, 200), f"{weather_desc}", font=font_small, fill=0)
+            draw.text((x, 220), f"{low}°~{high}°", font=font_small, fill=0)
 
-        # 穿衣建议（上移，填充底部）
+        # 穿衣建议（符号 [衣]）
         advice = get_clothing_advice(curr_temp)
-        draw.line([(20, 240), (380, 240)], fill=0, width=1)
+        draw.line([(20, 250), (380, 250)], fill=0, width=1)
         advice_lines = [advice[i:i+19] for i in range(0, len(advice), 19)]
         for i, line in enumerate(advice_lines[:2]):
-            draw.text((20, 250 + i*18), f"👕 {line}", font=font_tiny, fill=0)
+            draw.text((20, 258 + i*22), f"[衣] {line}", font=font_small, fill=0)
 
     except Exception as e:
         print(f"天气获取异常: {e}")
         draw.text((20, 50), "天气数据获取失败，请检查网络", font=font_item, fill=0)
 
     push_image(img, 4)
+
 # ================= 主程序 =================
 if __name__ == "__main__":
     if not API_KEY or not MAC_ADDRESS:
         print("错误: 请在 GitHub Secrets 中配置 ZECTRIX_API_KEY 和 ZECTRIX_MAC")
         exit(1)
 
-    task_zhihu()              # 生成 Page 1, 2
-    task_calendar()           # 生成 Page 3
-    task_weather_dashboard()  # 生成 Page 4
+    task_zhihu()
+    task_calendar()
+    task_weather_dashboard()
     print("所有任务执行完毕！")
