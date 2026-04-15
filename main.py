@@ -13,7 +13,7 @@ PUSH_URL = f"https://cloud.zectrix.com/open/v1/devices/{MAC_ADDRESS}/display/ima
 
 # 高德配置（津南区）
 AMAP_KEY = os.environ.get("AMAP_WEATHER_KEY")
-ADCODE = "120112"  # 津南区
+ADCODE = "330110"  # 津南区
 
 FONT_PATH = "font.ttf"
 try:
