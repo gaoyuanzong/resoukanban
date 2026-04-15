@@ -30,13 +30,6 @@ except:
 
 HEADERS = {'User-Agent': 'Mozilla/5.0'}
 
-def get_wrapped_lines(text, max_chars=18):
-    lines = []
-    while text:
-        lines.append(text[:max_chars])
-        text = text[max_chars:]
-    return lines
-
 def get_clothing_advice(temp):
     try:
         t = int(temp)
@@ -116,48 +109,6 @@ def push_image(img, page_id):
     except Exception as e:
         print(f"Page {page_id} 推送失败: {e}")
 
-# ================= 知乎热榜 =================
-def task_zhihu():
-    print("获取知乎热榜...")
-    try:
-        url = "https://api.zhihu.com/topstory/hot-list"
-        res = requests.get(url, headers=HEADERS, timeout=10).json()
-        titles = [item['target']['title'] for item in res['data']]
-    except:
-        titles = ["数据获取失败"] * 10
-
-    def draw_list(draw, page_title, items, start_idx):
-        draw.rounded_rectangle([(10, 10), (390, 45)], radius=8, fill=0)
-        draw.text((20, 15), page_title, font=font_title, fill=255)
-        y, last_idx = 55, start_idx
-        item_gap = 12
-        line_height = 22
-        for i in range(start_idx, len(items)):
-            lines = get_wrapped_lines(items[i], 19)
-            required_h = len(lines) * line_height
-            if y + required_h > 295:
-                break
-            current_num = i + 1
-            draw.rounded_rectangle([(10, y), (36, y+24)], radius=6, fill=0)
-            num_x = 18 if current_num < 10 else 11
-            draw.text((num_x, y+2), str(current_num), font=font_small, fill=255)
-            curr_y = y + 2
-            for line in lines:
-                draw.text((45, curr_y), line, font=font_item, fill=0)
-                curr_y += line_height
-            y += max(24, required_h) + item_gap
-            last_idx = i + 1
-            if y < 290:
-                draw.line([(45, y - item_gap/2), (380, y - item_gap/2)], fill=0, width=1)
-        return last_idx
-
-    img1 = Image.new('1', (400, 300), color=255)
-    next_s = draw_list(ImageDraw.Draw(img1), "◆ 知乎热榜 (一)", titles, 0)
-    push_image(img1, 1)
-    img2 = Image.new('1', (400, 300), color=255)
-    draw_list(ImageDraw.Draw(img2), "◆ 知乎热榜 (二)", titles, next_s)
-    push_image(img2, 2)
-
 # ================= 日历（北京时间） =================
 def task_calendar():
     print("生成 Page 3: 日历...")
@@ -195,7 +146,7 @@ def task_calendar():
                     else:
                         draw.text((dx+2, curr_y+18), bottom_text, font=font_tiny, fill=0)
         curr_y += row_h
-    push_image(img, 3)
+    push_image(img, 2)
 
 # ================= 混合天气获取（高德实时+高德预报，wttr.in 日出日落） =================
 def get_hybrid_weather():
@@ -309,7 +260,7 @@ def task_weather_dashboard():
     weather = get_hybrid_weather()
     if weather["temp_curr"] == 0 and not weather["forecasts"]:
         draw.text((20, 50), "天气数据获取失败，请检查API Key或网络", font=font_item, fill=0)
-        push_image(img, 4)
+        push_image(img, 3)
         return
 
     city_name = weather["city"]
@@ -327,7 +278,7 @@ def task_weather_dashboard():
     now_beijing = datetime.utcnow() + timedelta(hours=8)
     update_time = now_beijing.strftime("%H:%M")
 
-    draw.text((20, 10), f"{city_name} | 天大北洋园", font=font_title, fill=0)
+    draw.text((20, 10), f"{city_name} | 菜鸟智谷", font=font_title, fill=0)
     time_text = f"更新: {update_time}"
     try:
         bbox = draw.textbbox((0, 0), time_text, font=font_small)
@@ -361,14 +312,13 @@ def task_weather_dashboard():
     for i, line in enumerate(advice_lines[:2]):
         draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
 
-    push_image(img, 4)
+    push_image(img, 3)
 
 # ================= 主程序 =================
 if __name__ == "__main__":
     if not API_KEY or not MAC_ADDRESS:
         print("错误: 请配置 ZECTRIX_API_KEY 和 ZECTRIX_MAC")
         exit(1)
-    task_zhihu()
     task_calendar()
     task_weather_dashboard()
     print("所有任务执行完毕！")
