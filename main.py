@@ -146,7 +146,7 @@ def task_calendar():
                     else:
                         draw.text((dx+2, curr_y+18), bottom_text, font=font_tiny, fill=0)
         curr_y += row_h
-    push_image(img, 2)
+    push_image(img, 3)
 
 # ================= 混合天气获取（高德实时+高德预报，wttr.in 日出日落） =================
 def get_hybrid_weather():
@@ -260,7 +260,7 @@ def task_weather_dashboard():
     weather = get_hybrid_weather()
     if weather["temp_curr"] == 0 and not weather["forecasts"]:
         draw.text((20, 50), "天气数据获取失败，请检查API Key或网络", font=font_item, fill=0)
-        push_image(img, 3)
+        push_image(img, 1)
         return
 
     city_name = weather["city"]
@@ -312,7 +312,56 @@ def task_weather_dashboard():
     for i, line in enumerate(advice_lines[:2]):
         draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
 
-    push_image(img, 3)
+    push_image(img, 1)
+
+# ================= IT之家 热门新闻 =================
+def get_ithome_news():
+    """抓取 IT之家 热门新闻标题"""
+    result = []
+    try:
+        resp = requests.get("https://www.ithome.com/", headers=HEADERS, timeout=10)
+        resp.encoding = 'utf-8'
+        # 匹配热门新闻列表中的标题
+        pattern = re.compile(r'<a[^>]+href="https://www\.ithome\.com/[^"]*"[^>]*>([^<]+)</a>')
+        titles = pattern.findall(resp.text)
+        # 去重并过滤
+        seen = set()
+        for t in titles:
+            t = t.strip()
+            if len(t) > 5 and t not in seen and not t.startswith('http'):
+                seen.add(t)
+                result.append(t)
+                if len(result) >= 10:
+                    break
+        print(f"✅ IT之家新闻获取成功: {len(result)} 条")
+    except Exception as e:
+        print(f"❌ IT之家请求异常: {e}")
+    return result
+
+# ================= 新闻看板 =================
+def task_news_dashboard():
+    print("生成 Page 4: IT之家热门新闻...")
+    img = Image.new('1', (400, 300), color=255)
+    draw = ImageDraw.Draw(img)
+
+    news = get_ithome_news()
+    if not news:
+        draw.text((20, 50), "新闻数据获取失败，请检查网络", font=font_item, fill=0)
+        push_image(img, 2)
+        return
+
+    draw.text((20, 10), "IT之家 | 热门资讯", font=font_title, fill=0)
+    draw.line([(20, 40), (380, 40)], fill=0, width=2)
+
+    y = 55
+    for i, title in enumerate(news[:8]):
+        # 截断超长标题
+        if len(title) > 22:
+            title = title[:21] + "…"
+        draw.text((25, y), f"{i+1}. {title}", font=font_item, fill=0)
+        y += 30
+
+    push_image(img, 2)
 
 # ================= 主程序 =================
 if __name__ == "__main__":
@@ -321,4 +370,5 @@ if __name__ == "__main__":
         exit(1)
     task_calendar()
     task_weather_dashboard()
+    task_news_dashboard()
     print("所有任务执行完毕！")
