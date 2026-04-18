@@ -110,7 +110,7 @@ def push_image(img, page_id):
         print(f"Page {page_id} 推送失败: {e}")
 
 # ================= 日历（北京时间） =================
-def task_calendar():
+def task_history_photo():
     print("生成 Page 3: 日历...")
     img = Image.new('1', (400, 300), color=255)
     draw = ImageDraw.Draw(img)
@@ -260,7 +260,7 @@ def task_weather_dashboard():
     weather = get_hybrid_weather()
     if weather["temp_curr"] == 0 and not weather["forecasts"]:
         draw.text((20, 50), "天气数据获取失败，请检查API Key或网络", font=font_item, fill=0)
-        push_image(img, 1)
+        push_image(img, 4)
         return
 
     city_name = weather["city"]
@@ -312,7 +312,7 @@ def task_weather_dashboard():
     for i, line in enumerate(advice_lines[:2]):
         draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
 
-    push_image(img, 1)
+    push_image(img, 4)
 
 # ================= IT之家 热门新闻 =================
 def get_ithome_news():
@@ -347,7 +347,7 @@ def task_news_dashboard():
     news = get_ithome_news()
     if not news:
         draw.text((20, 50), "新闻数据获取失败，请检查网络", font=font_item, fill=0)
-        push_image(img, 2)
+        push_image(img, 5)
         return
 
     draw.text((20, 10), "IT之家 | 热门资讯", font=font_title, fill=0)
@@ -361,14 +361,14 @@ def task_news_dashboard():
         draw.text((25, y), f"{i+1}. {title}", font=font_item, fill=0)
         y += 30
 
-    push_image(img, 2)
+    push_image(img, 5)
 
 # ================= 主程序 =================
 if __name__ == "__main__":
     if not API_KEY or not MAC_ADDRESS:
         print("错误: 请配置 ZECTRIX_API_KEY 和 ZECTRIX_MAC")
         exit(1)
-    task_calendar()
+    task_history_photo()
     task_weather_dashboard()
     task_news_dashboard()
     print("所有任务执行完毕！")
