@@ -47,7 +47,7 @@ def ccgen(prompt, filename):
     workdir = "/tmp/cc-gen-work"
     os.makedirs(workdir, exist_ok=True)
     cmd = [
-        "claude", "--permission-mode", "bypassPermissions", "--print",
+        "/home/gaoyuan/nodejs/bin/claude", "--permission-mode", "bypassPermissions", "--print",
         f"{prompt}。直接输出纯文本，不要markdown代码块，不要任何前缀说明，直接把内容写入文件：{output}"
     ]
     try:
@@ -59,11 +59,12 @@ def ccgen(prompt, filename):
     return None
 
 def read_ccgen(filename):
-    """读取 ccgen 生成的文件内容"""
+    """从内容池读取全部内容行"""
     path = os.path.join(CCGEN_DIR, filename)
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
+            lines = [line.strip() for line in f if line.strip()]
+        return lines
     return []
 
 def push_image(img, page_id):
@@ -326,33 +327,16 @@ def mode_greeting():
     hour = datetime.now().hour
     if 5 <= hour < 12:
         title = "早安"
-        msgs = [
-            "新的一天，从微笑开始。早安！",
-            "早起的你，已经赢在起跑线。",
-            "阳光正好，今天一定有好事发生。",
-            "早安！今天的你很好看。",
-            "早起一刻钟，整天都轻松。",
-        ]
+        file = "greeting_am.txt"
     elif 12 <= hour < 18:
         title = "午安"
-        msgs = [
-            "午休片刻，下午更有精神。",
-            "午安！吃顿好饭，犒赏自己。",
-            "下午好，记得补充水分。",
-            "午安！半天的努力很棒。",
-            "休息是为了走更远的路。",
-        ]
+        file = "greeting_noon.txt"
     else:
         title = "晚安"
-        msgs = [
-            "晚安，好梦。明天见。",
-            "今天辛苦了，晚安休息吧。",
-            "放下所有烦恼，安睡到天亮。",
-            "晚安！愿你有个好梦。",
-            "今天的你已经做得很好了。",
-        ]
+        file = "goodnight.txt"
 
-    msg = random.choice(msgs)
+    lines = read_ccgen(file)
+    msg = random.choice(lines) if lines else "今日宜心平气和。"
 
     img = new_image()
     draw = ImageDraw.Draw(img)
