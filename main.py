@@ -831,7 +831,7 @@ def mode_weather():
     draw.line([(10, 138), (390, 138)], fill=0)
     y = 148
     for fc in data["forecasts"]:
-        md = fc["date"].replace("-", "/")[5:]
+        md = fc["date"][-5:]  # e.g. "04-21"
         draw.text((10, y), md, font=font_tiny, fill=0)
         draw.text((80, y), fc["weather"], font=font_tiny, fill=0)
         draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_tiny, fill=0)
@@ -1076,7 +1076,7 @@ def task_weather_dashboard():
     draw.line([(10, 140), (390, 140)], fill=0)
     y = 150
     for fc in data["forecasts"]:
-        md = fc["date"].replace("-", "/")[5:]
+        md = fc["date"][-5:]  # e.g. "04-21"
         draw.text((10, y), md, font=font_small, fill=0)
         draw.text((80, y), fc["weather"][:6], font=font_small, fill=0)
         draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_small, fill=0)
