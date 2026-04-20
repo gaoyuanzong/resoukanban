@@ -1065,16 +1065,16 @@ def task_weather_dashboard():
     lunar = get_lunar_or_festival(datetime.now().year, datetime.now().month, datetime.now().day)
     img = new_image()
     draw = ImageDraw.Draw(img)
-    draw.text((10, 8), f"{data['city']} | 杭州", font=font_item, fill=0)
-    draw.text((280, 8), solar, font=font_item, fill=0)
-    draw.text((200, 30), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
-    draw.text((200, 60), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_item, fill=0, anchor="mt")
-    draw.text((10, 82), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_small, fill=0)
-    draw.text((10, 98), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_small, fill=0)
-    draw.line([(10, 114), (390, 114)], fill=0)
-    draw.text((10, 118), advice, font=font_small, fill=0)
-    draw.line([(10, 136), (390, 136)], fill=0)
-    y = 146
+    draw.text((10, 8), f"{data['city']} | 杭州", font=font_small, fill=0)
+    draw.text((300, 8), solar, font=font_small, fill=0)
+    draw.text((200, 32), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
+    draw.text((200, 62), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_small, fill=0, anchor="mt")
+    draw.text((10, 86), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_small, fill=0)
+    draw.text((10, 102), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_small, fill=0)
+    draw.line([(10, 118), (390, 118)], fill=0)
+    draw.text((10, 122), advice, font=font_small, fill=0)
+    draw.line([(10, 140), (390, 140)], fill=0)
+    y = 150
     for fc in data["forecasts"]:
         md = fc["date"].replace("-", "/")[5:]
         draw.text((10, y), md, font=font_small, fill=0)
@@ -1082,8 +1082,8 @@ def task_weather_dashboard():
         draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_small, fill=0)
         y += 17
     if lunar:
-        draw.line([(10, 196), (390, 196)], fill=0)
-        draw.text((10, 200), f"农历 {lunar}", font=font_small, fill=0)
+        draw.line([(10, 218), (390, 218)], fill=0)
+        draw.text((10, 222), f"农历 {lunar}", font=font_small, fill=0)
     draw.text((200, 285), "天气 · 每小时更新", font=font_small, fill=0, anchor="mt")
     push_image(img, 4)
 
