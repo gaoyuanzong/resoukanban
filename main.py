@@ -810,37 +810,6 @@ def mode_horoscope():
     push_image(img, 3)
 
 # ================= 模式20: 天气看板（复用已有） =================
-@mode_register("weather", "天气看板")
-def mode_weather():
-    """渲染天气到 page 3"""
-    data = get_hybrid_weather()
-    t = data["temp_curr"]
-    w = data["weather"]
-    advice = get_clothing_advice(t)
-    solar = get_solar_term(datetime.now().year, datetime.now().month, datetime.now().day)
-    img = new_image()
-    draw = ImageDraw.Draw(img)
-    draw.text((10, 8), f"{data['city']} | 杭州", font=font_small, fill=0)
-    draw.text((300, 8), solar, font=font_small, fill=0)
-    draw.text((200, 32), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
-    draw.text((200, 62), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_small, fill=0, anchor="mt")
-    draw.text((10, 86), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_tiny, fill=0)
-    draw.text((10, 100), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_tiny, fill=0)
-    draw.line([(10, 116), (390, 116)], fill=0)
-    draw.text((10, 120), advice, font=font_tiny, fill=0)
-    draw.line([(10, 138), (390, 138)], fill=0)
-    y = 148
-    for fc in data["forecasts"]:
-        md = fc["date"][-5:]  # e.g. "04-21"
-        draw.text((10, y), md, font=font_tiny, fill=0)
-        draw.text((80, y), fc["weather"], font=font_tiny, fill=0)
-        draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_tiny, fill=0)
-        y += 16
-    draw.text((200, 285), "天气 · 24模式随机", font=font_tiny, fill=0, anchor="mt")
-    push_image(img, 3)
-
-# ================= 模式21: 新闻看板（复用已有） =================
-@mode_register("news", "IT之家新闻")
 def mode_news():
     """渲染新闻到 page 3"""
     news = get_ithome_news()
