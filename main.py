@@ -1066,65 +1066,58 @@ def task_weather_dashboard():
     img = new_image()
     draw = ImageDraw.Draw(img)
 
-    # 顶行：城市 + 节气
+    # === 顶行：城市 + 节气 + 日出日落 ===
     draw.text((10, 6), f"{data['city']}", font=font_large, fill=0)
     draw.text((310, 6), solar, font=font_label, fill=0)
+    draw.text((10, 28), f"日出 {data['sunrise']}  日落 {data['sunset']}", font=font_small, fill=0)
 
-    # 主温度（大字）
-    draw.text((200, 36), f"{t}°", font=font_display, fill=0, anchor="mt")
-    draw.text((200, 88), w, font=font_mid, fill=0, anchor="mt")
+    draw.line([(10, 46), (390, 46)], fill=0)
 
-    # 高低/体感
-    draw.text((200, 108), f"最高{data['temp_high']}° | 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
-    draw.text((200, 125), f"体感 {data['feel_temp']}", font=font_label, fill=0, anchor="mt")
+    # === 主温度（大字居中）===
+    draw.text((200, 50), f"{t}°", font=font_display, fill=0, anchor="mt")
+    draw.text((200, 106), w, font=font_mid, fill=0, anchor="mt")
 
-    draw.line([(10, 140), (390, 140)], fill=0)
+    # === 今日详情行 ===
+    draw.text((200, 128), f"最高{data['temp_high']}° / 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 146), f"体感 {data['feel_temp']}   湿度 {data['humidity']}   {data['wind_info']}", font=font_label, fill=0, anchor="mt")
 
-    # 湿度 + 风 + 日出 + 日落
-    draw.text((10, 144), f"湿度 {data['humidity']}", font=font_label, fill=0)
-    draw.text((120, 144), data['wind_info'], font=font_label, fill=0)
-    draw.text((280, 144), f"日出 {data['sunrise']}", font=font_label, fill=0)
-    draw.text((370, 144), f"日落 {data['sunset']}", font=font_label, fill=0, anchor="rt")
+    draw.line([(10, 162), (390, 162)], fill=0)
 
-    draw.line([(10, 164), (390, 164)], fill=0)
+    # === 穿衣建议 ===
+    draw.text((10, 166), advice, font=font_small, fill=0)
 
-    # 穿衣建议
-    draw.text((200, 170), advice, font=font_label, fill=0, anchor="mt")
+    draw.line([(10, 184), (390, 184)], fill=0)
 
-    draw.line([(10, 190), (390, 190)], fill=0)
-
-    # 未来天气：2x2 网格，每格放日期+天气+体感+风速（4行）
-    # 每格 190px宽，两列: x0=10, x1=200
-    # 每行 32px高，两行: y0=196, y1=228
+    # === 未来天气：2×2 网格 ===
+    # 列宽=190，左列x=10，右列x=205
+    # 每格高36px，行1 y=188，行2 y=228
     forecasts = data["forecasts"][:4]
-    cols = 2
-    start_x = [10, 200]
-    start_y = 196
-    row_h = 32
+    col_x = [10, 205]
+    row_y = [188, 228]
 
     for i, fc in enumerate(forecasts):
-        col = i % cols
-        row = i // cols
-        x = start_x[col]
-        y = start_y + row * row_h
-        md = fc["date"][-5:]
+        col = i % 2
+        row = i // 2
+        x = col_x[col]
+        y = row_y[row]
+
         # 第1行：日期 + 天气
-        draw.text((x, y), md, font=font_mid, fill=0)
-        draw.text((x+65, y), fc["weather"][:4], font=font_mid, fill=0)
-        draw.text((x+130, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
-        # 第2行：体感 + 风（复用当前整体数据）
-        draw.text((x, y+18), f"体感{data['feel_temp']}  {data['wind_info']}", font=font_forecast, fill=0)
-        # 第3行：湿度
-        draw.text((x, y+34), f"湿度{data['humidity']}", font=font_forecast, fill=0)
+        draw.text((x, y), fc["date"][-5:], font=font_mid, fill=0)       # "04-21"
+        draw.text((x+68, y), fc["weather"][:4], font=font_mid, fill=0)  # "小雨"
+        draw.text((x+118, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)  # "18°/13°"
 
-    y_bottom = start_y + 2 * row_h + 10
+        # 第2行：体感 + 风 + 湿度
+        draw.text((x, y+20), f"体感{data['feel_temp']}", font=font_forecast, fill=0)
+        draw.text((x+90, y+20), data['wind_info'], font=font_forecast, fill=0)
+        draw.text((x+165, y+20), data['humidity'], font=font_forecast, fill=0)
 
-    # 农历
+    # === 底部农历 ===
+    y_bottom = row_y[1] + 40
     if lunar:
         draw.line([(10, y_bottom), (390, y_bottom)], fill=0)
         draw.text((10, y_bottom+4), f"农历 {lunar}", font=font_label, fill=0)
 
-    draw.text((200, 294), "天气 · 每小时更新", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 294), "天气 · 每小时更新", font=font_forecast, fill=0, anchor="mt")
     push_image(img, 4)
 
 def get_ithome_news():
