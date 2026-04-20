@@ -1,8 +1,9 @@
 import os
+import random
 import requests
 import calendar
 import re
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
 from datetime import datetime, timedelta
 from zhdate import ZhDate
 
@@ -14,6 +15,10 @@ PUSH_URL = f"https://cloud.zectrix.com/open/v1/devices/{MAC_ADDRESS}/display/ima
 # 高德配置（津南区）
 AMAP_KEY = os.environ.get("AMAP_WEATHER_KEY")
 ADCODE = "330110"  # 津南区
+
+
+# NAS 照片路径
+NAS_PHOTO_ROOT = "/nas/admin/Photos"
 
 FONT_PATH = "font.ttf"
 try:
@@ -109,46 +114,86 @@ def push_image(img, page_id):
     except Exception as e:
         print(f"Page {page_id} 推送失败: {e}")
 
-# ================= 日历（北京时间） =================
+# ================= 历史今日照片 =================
 def task_history_photo():
-    print("生成 Page 3: 日历...")
-    img = Image.new('1', (400, 300), color=255)
+    """从 NAS 照片目录中查找“历史上的今天”的照片"""
+    print("生成 Page 3: 历史今日...")
+    
+    today = datetime.now()
+    
+    candidates = []
+    processed = 0
+    
+    for root, dirs, files in os.walk(NAS_PHOTO_ROOT):
+        if '@eaDir' in dirs:
+            dirs.remove('@eaDir')
+        
+        for file in files:
+            if not file.lower().endswith(('.jpg', '.jpeg')):
+                continue
+            processed += 1
+            
+            name = file[:8]
+            for sep in ('', '-', '/'):
+                for fmt in ('%Y%m%d', '%Y-%m-%d', '%Y/%m/%d'):
+                    try:
+                        file_date = datetime.strptime(name, fmt)
+                        if file_date.month == today.month and file_date.day == today.day:
+                            candidates.append(os.path.join(root, file))
+                            break
+                    except ValueError:
+                        continue
+                    name = name.replace(sep, '/', 2) if sep else name
+    
+    if not candidates:
+        print("✨ 今日无历史照片，提示上次发回消")
+        return
+    
+    chosen = random.choice(candidates)
+    basename = os.path.basename(chosen)
+    year = basename[:4]
+    print(f"✨ 历史今日: {year}年 {today.month}月{today.day}日 → {basename}")
+    
+    img = Image.open(chosen)
+    img = ImageOps.exif_transpose(img)
+    
+    SCREEN_W, SCREEN_H = 400, 300
+    img_ratio = img.width / img.height
+    target_ratio = SCREEN_W / SCREEN_H
+    
+    if img_ratio > target_ratio:
+        new_height = SCREEN_H
+        new_width = int(new_height * img_ratio)
+    else:
+        new_width = SCREEN_W
+        new_height = int(new_width / img_ratio)
+    
+    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    left = (new_width - SCREEN_W) // 2
+    top = (new_height - SCREEN_H) // 2
+    img = img.crop((left, top, left + SCREEN_W, top + SCREEN_H))
+    
     draw = ImageDraw.Draw(img)
-    now_utc = datetime.utcnow()
-    now = now_utc + timedelta(hours=8)
-    y, m, today = now.year, now.month, now.day
-    draw.text((20, 10), str(m), font=font_huge, fill=0)
-    draw.text((90, 20), now.strftime("%B"), font=font_title, fill=0)
-    draw.text((90, 48), str(y), font=font_item, fill=0)
-    draw.line([(20, 78), (380, 78)], fill=0, width=2)
-    headers = ["日", "一", "二", "三", "四", "五", "六"]
-    col_w = 53
-    for i, h in enumerate(headers):
-        draw.text((25 + i*col_w, 88), h, font=font_small, fill=0)
-    calendar.setfirstweekday(calendar.SUNDAY)
-    cal = calendar.monthcalendar(y, m)
-    curr_y, row_h = 115, 38
-    for week in cal:
-        for c, day in enumerate(week):
-            if day != 0:
-                dx = 25 + c * col_w
-                if day == today:
-                    draw.rounded_rectangle([(dx-3, curr_y-2), (dx+35, curr_y+32)], radius=5, outline=0)
-                draw.text((dx+2, curr_y), str(day), font=font_item, fill=0)
-                bottom_text = get_lunar_or_festival(y, m, day)
-                if bottom_text:
-                    if len(bottom_text) > 3:
-                        try:
-                            font_smaller = ImageFont.truetype(FONT_PATH, 10)
-                            draw.text((dx+2, curr_y+18), bottom_text, font=font_smaller, fill=0)
-                        except:
-                            draw.text((dx+2, curr_y+18), bottom_text[:3], font=font_tiny, fill=0)
-                    else:
-                        draw.text((dx+2, curr_y+18), bottom_text, font=font_tiny, fill=0)
-        curr_y += row_h
+    date_text = f"{year}年{today.month}月{today.day}日"
+    try:
+        font_date = ImageFont.truetype(FONT_PATH, 14)
+    except:
+        font_date = font_small
+    
+    bbox = draw.textbbox((0, 0), date_text, font=font_date)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    pad_x, pad_y = 6, 4
+    margin_right, margin_bottom = 8, 8
+    rect_x1 = SCREEN_W - tw - pad_x * 2 - margin_right
+    rect_y1 = SCREEN_H - th - pad_y * 2 - margin_bottom
+    rect_x2 = SCREEN_W - margin_right
+    rect_y2 = SCREEN_H - margin_bottom
+    draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=0)
+    draw.text((rect_x1 + pad_x, rect_y1 + pad_y), date_text, font=font_date, fill=255)
+    
     push_image(img, 3)
 
-# ================= 混合天气获取（高德实时+高德预报，wttr.in 日出日落） =================
 def get_hybrid_weather():
     """高德实时(base) + 高德预报(all) + wttr.in 日出日落"""
     result = {
