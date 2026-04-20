@@ -1080,13 +1080,11 @@ def task_weather_dashboard():
 
     draw.line([(10, 140), (390, 140)], fill=0)
 
-    # 湿度 + 风
+    # 湿度 + 风 + 日出 + 日落
     draw.text((10, 144), f"湿度 {data['humidity']}", font=font_label, fill=0)
-    draw.text((130, 144), data['wind_info'], font=font_label, fill=0)
-
-    # 日出 + 日落
-    draw.text((310, 144), f"日出 {data['sunrise']}", font=font_label, fill=0)
-    draw.text((380, 144), f"日落 {data['sunset']}", font=font_label, fill=0, anchor="rt")
+    draw.text((120, 144), data['wind_info'], font=font_label, fill=0)
+    draw.text((280, 144), f"日出 {data['sunrise']}", font=font_label, fill=0)
+    draw.text((370, 144), f"日落 {data['sunset']}", font=font_label, fill=0, anchor="rt")
 
     draw.line([(10, 164), (390, 164)], fill=0)
 
@@ -1095,24 +1093,31 @@ def task_weather_dashboard():
 
     draw.line([(10, 190), (390, 190)], fill=0)
 
-    # 未来天气：2x2 网格布局
+    # 未来天气：2x2 网格，每格放日期+天气+体感+风速（4行）
+    # 每格 190px宽，两列: x0=10, x1=200
+    # 每行 32px高，两行: y0=196, y1=228
     forecasts = data["forecasts"][:4]
     cols = 2
-    cell_w = 195
-    cell_h = 46
-    start_x = [10, 205]
+    start_x = [10, 200]
     start_y = 196
+    row_h = 32
 
     for i, fc in enumerate(forecasts):
         col = i % cols
         row = i // cols
         x = start_x[col]
-        y = start_y + row * cell_h
+        y = start_y + row * row_h
         md = fc["date"][-5:]
+        # 第1行：日期 + 天气
         draw.text((x, y), md, font=font_mid, fill=0)
-        draw.text((x, y+22), f"{fc['weather']}  {fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
+        draw.text((x+65, y), fc["weather"][:4], font=font_mid, fill=0)
+        draw.text((x+130, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
+        # 第2行：体感 + 风（复用当前整体数据）
+        draw.text((x, y+18), f"体感{data['feel_temp']}  {data['wind_info']}", font=font_forecast, fill=0)
+        # 第3行：湿度
+        draw.text((x, y+34), f"湿度{data['humidity']}", font=font_forecast, fill=0)
 
-    y_bottom = start_y + 2 * cell_h
+    y_bottom = start_y + 2 * row_h + 10
 
     # 农历
     if lunar:
