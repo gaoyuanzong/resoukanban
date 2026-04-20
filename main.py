@@ -1066,10 +1066,11 @@ def task_weather_dashboard():
     img = new_image()
     draw = ImageDraw.Draw(img)
 
-    # === 顶行：城市 + 节气 + 日出日落 ===
+    # === 顶行：城市 + 节气 + 日出日落（分散三处） ===
     draw.text((10, 22), f"{data['city']}", font=font_large, fill=0)
-    draw.text((310, 22), solar, font=font_label, fill=0)
-    draw.text((10, 48), f"日出 {data['sunrise']}  日落 {data['sunset']}", font=font_small, fill=0)
+    draw.text((200, 22), solar, font=font_label, fill=0, anchor="mt")
+    draw.text((380, 22), f"日落{data['sunset']}", font=font_small, fill=0, anchor="rt")
+    draw.text((10, 48), f"日出 {data['sunrise']}", font=font_small, fill=0)
 
     draw.line([(10, 68), (390, 68)], fill=0)
 
@@ -1091,7 +1092,7 @@ def task_weather_dashboard():
     # === 未来天气：2×2 网格 ===
     forecasts = data["forecasts"][:4]
     col_x = [10, 205]
-    row_y = [220, 262]
+    row_y = [228, 272]
 
     for i, fc in enumerate(forecasts):
         col = i % 2
@@ -1099,20 +1100,18 @@ def task_weather_dashboard():
         x = col_x[col]
         y = row_y[row]
 
-        # 第1行：日期 + 天气 + 温度
         draw.text((x, y), fc["date"][-5:], font=font_mid, fill=0)
         draw.text((x+68, y), fc["weather"][:4], font=font_mid, fill=0)
         draw.text((x+118, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
 
-        # 第2行：体感 + 风 + 湿度
         draw.text((x, y+22), f"体感{data['feel_temp']}", font=font_forecast, fill=0)
         draw.text((x+90, y+22), data['wind_info'], font=font_forecast, fill=0)
         draw.text((x+165, y+22), data['humidity'], font=font_forecast, fill=0)
 
     # === 底部农历 ===
     if lunar:
-        draw.line([(10, 286), (390, 286)], fill=0)
-        draw.text((10, 290), f"农历 {lunar}", font=font_label, fill=0)
+        draw.line([(10, 296), (390, 296)], fill=0)
+        draw.text((10, 300), f"农历 {lunar}", font=font_label, fill=0)
 
     push_image(img, 4)
 
