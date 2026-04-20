@@ -12,6 +12,11 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
 from datetime import datetime, timedelta
 from zhdate import ZhDate
 
+# Phase 1 新模块
+from config_reader import Config
+from history_record import History
+from cli_args import parse_args, list_modes
+
 # ================= 配置区 =================
 API_KEY = os.environ.get("ZECTRIX_API_KEY")
 MAC_ADDRESS = os.environ.get("ZECTRIX_MAC")
@@ -1024,7 +1029,7 @@ def get_hybrid_weather():
         pass
     return result
 
-def task_weather_dashboard():
+def task_weather_dashboard(cfg=None, history=None):
     print("生成 Page 4: 天气看板...")
     img = Image.new('1', (400, 300), color=255)
     draw = ImageDraw.Draw(img)
@@ -1079,6 +1084,9 @@ def task_weather_dashboard():
 
     push_image(img, 4)
 
+    if history:
+        history.record(page=4, mode="weather", pushed=True)
+
 def get_ithome_news():
     try:
         url = "https://api.ithome.com/ajax/news ranking?rankingId=hot"
@@ -1112,27 +1120,107 @@ def task_news_dashboard():
 
 # ================= Page 3 随机转盘 =================
 
-def task_page3_random():
-    """从24个模式中随机选一个执行"""
-    if not MODES:
-        print("错误: 没有注册任何模式")
+def task_page3_random(cfg=None, history=None):
+    """从配置的可用模式中随机选一个执行"""
+    if cfg is None:
+        cfg = Config()
+
+    # 只从配置允许的模式中选择
+    available = [(mid, name, fn) for mid, name, fn in MODES if mid in cfg.page3_modes]
+    if not available:
+        print("错误: 没有可用模式")
         return
-    chosen = random.choice(MODES)
+
+    chosen = random.choice(available)
     mid, name, func = chosen
     print(f"🎲 抽中 Page 3 模式: {mid} ({name})")
+    pushed = False
     try:
         func()
+        pushed = True
     except Exception as e:
         print(f"模式 {mid} 执行失败: {e}")
         import traceback
         traceback.print_exc()
 
+    if history:
+        history.record(page=3, mode=mid, pushed=pushed)
+
 # ================= 主程序 =================
 if __name__ == "__main__":
+    args = parse_args()
+
+    # 加载配置
+    cfg = Config(args.config) if args.config else Config()
+
+    # 加载历史
+    hist_file = os.path.join(os.path.dirname(__file__), cfg.history_file)
+    history = History(hist_file, cfg.history_max)
+
+    # --history: 只打印历史
+    if args.history:
+        print(history.print_recent(20))
+        exit(0)
+
+    # --list: 只列出模式
+    if args.list:
+        list_modes(args.config)
+        exit(0)
+
+    # 强制推送逻辑（--force 时跳过 API 检查）
+    if args.force:
+        force_mode = args.force.lower()
+        target_page = args.page or 3
+        print(f"[Force] 强制推送 Page {target_page} 模式: {force_mode}")
+
+        # 找到对应函数
+        found = False
+        for mid, name, func in MODES:
+            if mid.lower() == force_mode:
+                try:
+                    func()
+                    history.record(page=target_page, mode=mid, pushed=True)
+                    print(f"[Force] {mid} 推送成功")
+                    found = True
+                except Exception as e:
+                    print(f"[Force] {mid} 失败: {e}")
+                    history.record(page=target_page, mode=mid, pushed=False)
+                break
+
+        if not found:
+            print(f"[Force] 未知模式: {force_mode}，可用: {[m[0] for m in MODES]}")
+
+        # weather 可以强制推 page 4
+        if force_mode == "weather" and target_page == 4:
+            try:
+                task_weather_dashboard()
+                history.record(page=4, mode="weather", pushed=True)
+            except Exception as e:
+                print(f"[Force] weather 失败: {e}")
+                history.record(page=4, mode="weather", pushed=False)
+
+        if found or force_mode == "weather":
+            print("所有任务执行完毕！")
+            exit(0)
+
+    # API 检查（仅在非 --force 时）
     if not API_KEY or not MAC_ADDRESS:
         print("错误: 请配置 ZECTRIX_API_KEY 和 ZECTRIX_MAC")
         exit(1)
-    task_page3_random()
-    task_weather_dashboard()
-    # task_news_dashboard()  # Page 5 已禁用
+
+    # 正常随机推送
+    if cfg.is_page_enabled(3):
+        task_page3_random(cfg, history)
+        # 记录 page 3 推送历史
+        for mid, name, func in MODES:
+            last = history.get_last_push(3)
+            if last and last.get("mode") == mid:
+                break
+        else:
+            # 从日志找刚推送的 mid
+            pass
+
+    if cfg.is_page_enabled(4):
+        task_weather_dashboard(cfg, history)
+
     print("所有任务执行完毕！")

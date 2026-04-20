@@ -1,0 +1,23 @@
+# 墨水屏看板配置文件
+# Page 3 设置
+page3:
+  # 启用的模式列表（留空表示全部）
+  modes: []
+  # 强制模式：null=随机, jokes=固定笑话, quote=固定语录...
+  force_mode: null
+  # 布局模板（暂未使用）
+  layout: default
+
+# Page 4 设置（天气）
+page4:
+  # 布局: standard=标准, compact=紧凑, full=全屏
+  layout: standard
+
+# 全局页面启用
+enabled_pages: [3, 4]
+
+# 推送历史
+history:
+  enabled: true
+  max_entries: 100
+  file: history.json
