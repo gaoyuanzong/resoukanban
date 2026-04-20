@@ -31,6 +31,12 @@ try:
     font_tiny = ImageFont.truetype(FONT_PATH, 11)
     font_48 = ImageFont.truetype(FONT_PATH, 48)
     font_36 = ImageFont.truetype(FONT_PATH, 36)
+    # 大字体（用于 Page 4/5 改善可读性）
+    font_display = ImageFont.truetype(FONT_PATH, 52)  # 主温度
+    font_large = ImageFont.truetype(FONT_PATH, 28)   # 城市/标题
+    font_mid = ImageFont.truetype(FONT_PATH, 20)      # 正文
+    font_label = ImageFont.truetype(FONT_PATH, 16)    # 标签/次要文字
+    font_forecast = ImageFont.truetype(FONT_PATH, 14) # 预报小字
 except:
     print("错误: 找不到 font.ttf")
     exit(1)
@@ -1050,7 +1056,7 @@ def get_hybrid_weather():
     return result
 
 def task_weather_dashboard():
-    print("生成 Page 4: 混合天气看板（高德+高德+wttr.in日出日落）...")
+    print("生成 Page 4: 天气看板...")
     data = get_hybrid_weather()
     w = data["weather"]
     t = data["temp_curr"]
@@ -1059,26 +1065,47 @@ def task_weather_dashboard():
     lunar = get_lunar_or_festival(datetime.now().year, datetime.now().month, datetime.now().day)
     img = new_image()
     draw = ImageDraw.Draw(img)
-    draw.text((10, 8), f"余杭区 | 杭州", font=font_small, fill=0)
-    draw.text((300, 8), solar, font=font_small, fill=0)
-    draw.text((200, 32), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
-    draw.text((200, 62), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_small, fill=0, anchor="mt")
-    draw.text((10, 86), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_tiny, fill=0)
-    draw.text((10, 100), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_tiny, fill=0)
-    draw.line([(10, 116), (390, 116)], fill=0)
-    draw.text((10, 120), advice, font=font_tiny, fill=0)
-    draw.line([(10, 138), (390, 138)], fill=0)
-    y = 148
-    for fc in data["forecasts"]:
+
+    # 顶部行：城市 + 节气
+    draw.text((10, 8), f"{data['city']}", font=font_large, fill=0)
+    draw.text((310, 8), solar, font=font_label, fill=0)
+
+    # 主温度（大字）
+    draw.text((200, 44), f"{t}°", font=font_display, fill=0, anchor="mt")
+    draw.text((200, 95), w, font=font_mid, fill=0, anchor="mt")
+
+    # 高低/体感
+    draw.text((200, 118), f"最高{data['temp_high']}° / 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 136), f"体感 {data['feel_temp']}", font=font_label, fill=0, anchor="mt")
+
+    draw.line([(10, 155), (390, 155)], fill=0)
+
+    # 中部：湿度 + 风 + 日出
+    draw.text((10, 160), f"湿度 {data['humidity']}", font=font_label, fill=0)
+    draw.text((200, 160), data['wind_info'], font=font_label, fill=0, anchor="mt")
+    draw.text((380, 160), f"日出 {data['sunrise']}", font=font_label, fill=0, anchor="rt")
+
+    # 穿衣建议
+    draw.line([(10, 185), (390, 185)], fill=0)
+    draw.text((200, 193), advice, font=font_mid, fill=0, anchor="mt")
+
+    draw.line([(10, 215), (390, 215)], fill=0)
+
+    # 四天预报
+    y = 222
+    for fc in data["forecasts"][:4]:
         md = fc["date"].replace("-", "/")[5:]
-        draw.text((10, y), md, font=font_tiny, fill=0)
-        draw.text((80, y), fc["weather"], font=font_tiny, fill=0)
-        draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_tiny, fill=0)
-        y += 16
+        draw.text((10, y), md, font=font_forecast, fill=0)
+        draw.text((90, y), fc["weather"][:6], font=font_forecast, fill=0)
+        draw.text((210, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_forecast, fill=0)
+        y += 18
+
+    # 农历
     if lunar:
-        draw.line([(10, 200), (390, 200)], fill=0)
-        draw.text((10, 206), f"农历 {lunar}", font=font_tiny, fill=0)
-    draw.text((200, 285), "天气 · 每小时更新", font=font_tiny, fill=0, anchor="mt")
+        draw.line([(10, 272), (390, 272)], fill=0)
+        draw.text((10, 278), f"农历 {lunar}", font=font_forecast, fill=0)
+
+    draw.text((200, 294), "天气 · 每小时更新", font=font_label, fill=0, anchor="mt")
     push_image(img, 4)
 
 def get_ithome_news():
@@ -1136,5 +1163,5 @@ if __name__ == "__main__":
         exit(1)
     task_page3_random()
     task_weather_dashboard()
-    task_news_dashboard()
+    # task_news_dashboard()  # Page 5 已禁用
     print("所有任务执行完毕！")
