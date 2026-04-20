@@ -9,6 +9,7 @@ import calendar
 import re
 import subprocess
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
+Image.MAX_IMAGE_PIXELS = None  # 禁用解压炸弹检查
 from datetime import datetime, timedelta
 from zhdate import ZhDate
 
@@ -1058,7 +1059,7 @@ def _render_weather_standard(draw, weather):
     """标准布局"""
     # === 城市名 + 更新时间 ===
     draw.text((20, 10), weather["city"], font=font_title, fill=0)
-    now_beijing = datetime.utcnow() + timedelta(hours=8)
+    now_beijing = datetime.now()
     update_time = now_beijing.strftime("%H:%M")
     time_text = f"更新 {update_time}"
     bbox = draw.textbbox((0, 0), time_text, font=font_small)

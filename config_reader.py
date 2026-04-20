@@ -97,7 +97,10 @@ class Config:
 
     @property
     def page3_modes(self):
-        return self._cfg.get("page3", {}).get("modes", DEFAULT_CFG["page3"]["modes"])
+        modes = self._cfg.get("page3", {}).get("modes")
+        if modes is None or modes == []:
+            return DEFAULT_CFG["page3"]["modes"]
+        return modes
 
     @property
     def page3_force_mode(self):
