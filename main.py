@@ -1057,61 +1057,56 @@ def get_hybrid_weather():
 
 def task_weather_dashboard():
     print("生成 Page 4: 天气看板...")
-    data = get_hybrid_weather()
-    w = data["weather"]
-    t = data["temp_curr"]
-    advice = get_clothing_advice(t)
-    solar = get_solar_term(datetime.now().year, datetime.now().month, datetime.now().day)
-    lunar = get_lunar_or_festival(datetime.now().year, datetime.now().month, datetime.now().day)
-    img = new_image()
+    img = Image.new('1', (400, 300), color=255)
     draw = ImageDraw.Draw(img)
 
-    # === 顶行：城市 + 节气 + 日出日落（分散三处） ===
-    draw.text((10, 22), f"{data['city']}", font=font_large, fill=0)
-    draw.text((200, 22), solar, font=font_label, fill=0, anchor="mt")
-    draw.text((380, 22), f"日落{data['sunset']}", font=font_small, fill=0, anchor="rt")
-    draw.text((10, 48), f"日出 {data['sunrise']}", font=font_small, fill=0)
+    weather = get_hybrid_weather()
+    if weather["temp_curr"] == 0 and not weather["forecasts"]:
+        draw.text((20, 50), "天气数据获取失败，请检查 API Key", font=font_item, fill=0)
+        push_image(img, 4)
+        return
 
-    draw.line([(10, 68), (390, 68)], fill=0)
+    # === 城市名 + 更新时间 ===
+    draw.text((20, 10), weather["city"], font=font_title, fill=0)
 
-    # === 主温度（大字居中） ===
-    draw.text((200, 74), f"{t}°", font=font_display, fill=0, anchor="mt")
-    draw.text((200, 130), w, font=font_mid, fill=0, anchor="mt")
+    now_beijing = datetime.utcnow() + timedelta(hours=8)
+    update_time = now_beijing.strftime("%H:%M")
+    time_text = f"更新 {update_time}"
+    bbox = draw.textbbox((0, 0), time_text, font=font_small)
+    time_width = bbox[2] - bbox[0]
+    draw.text((390 - time_width, 12), time_text, font=font_small, fill=0)
 
-    # === 今日详情行 ===
-    draw.text((200, 152), f"最高{data['temp_high']}° / 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
-    draw.text((200, 170), f"体感 {data['feel_temp']}   湿度 {data['humidity']}   {data['wind_info']}", font=font_label, fill=0, anchor="mt")
+    # === 主温度 + 天气 ===
+    draw.text((25, 40), f"{weather['temp_curr']}°C", font=font_48, fill=0)
+    draw.text((25, 100), f"{weather['temp_low']}°/{weather['temp_high']}°", font=font_item, fill=0)
+    draw.text((150, 45), weather["weather"], font=font_36, fill=0)
 
-    draw.line([(10, 188), (390, 188)], fill=0)
+    # === 右侧信息框（圆角矩形）===
+    draw.rounded_rectangle([(235, 45), (385, 130)], radius=8, outline=0, fill=0)
+    draw.text((245, 45), weather["wind_info"], font=font_small, fill=255)
+    draw.text((245, 70), f"湿度 {weather['humidity']}", font=font_small, fill=255)
+    draw.text((245, 95), f"体感 {weather['feel_temp']}", font=font_small, fill=255)
+
+    # === 日出日落 ===
+    draw.text((25, 135), f"日出 {weather['sunrise']}   日落 {weather['sunset']}", font=font_item, fill=0)
+
+    # === 分隔线 ===
+    draw.line([(20, 160), (380, 160)], fill=0, width=1)
+
+    # === 2天预报（左：第2天，右：第3天）===
+    x_positions = [30, 200]
+    for i, day in enumerate(weather["forecasts"][:2]):
+        x = x_positions[i]
+        draw.text((x, 175), day["date"], font=font_item, fill=0)
+        draw.text((x, 200), day["weather"], font=font_item, fill=0)
+        draw.text((x, 220), f"{day['temp_low']}°~{day['temp_high']}°", font=font_item, fill=0)
 
     # === 穿衣建议 ===
-    draw.text((10, 194), advice, font=font_small, fill=0)
-
-    draw.line([(10, 214), (390, 214)], fill=0)
-
-    # === 未来天气：2×2 网格 ===
-    forecasts = data["forecasts"][:4]
-    col_x = [10, 205]
-    row_y = [228, 272]
-
-    for i, fc in enumerate(forecasts):
-        col = i % 2
-        row = i // 2
-        x = col_x[col]
-        y = row_y[row]
-
-        draw.text((x, y), fc["date"][-5:], font=font_mid, fill=0)
-        draw.text((x+68, y), fc["weather"][:4], font=font_mid, fill=0)
-        draw.text((x+118, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
-
-        draw.text((x, y+22), f"体感{data['feel_temp']}", font=font_forecast, fill=0)
-        draw.text((x+90, y+22), data['wind_info'], font=font_forecast, fill=0)
-        draw.text((x+165, y+22), data['humidity'], font=font_forecast, fill=0)
-
-    # === 底部农历 ===
-    if lunar:
-        draw.line([(10, 296), (390, 296)], fill=0)
-        draw.text((10, 300), f"农历 {lunar}", font=font_label, fill=0)
+    advice = get_clothing_advice(weather["temp_curr"])
+    draw.line([(20, 250), (380, 250)], fill=0, width=1)
+    advice_lines = [advice[i:i+18] for i in range(0, len(advice), 18)]
+    for i, line in enumerate(advice_lines[:2]):
+        draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
 
     push_image(img, 4)
 
