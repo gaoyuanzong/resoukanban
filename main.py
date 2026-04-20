@@ -1067,33 +1067,31 @@ def task_weather_dashboard():
     draw = ImageDraw.Draw(img)
 
     # === 顶行：城市 + 节气 + 日出日落 ===
-    draw.text((10, 6), f"{data['city']}", font=font_large, fill=0)
-    draw.text((310, 6), solar, font=font_label, fill=0)
-    draw.text((10, 28), f"日出 {data['sunrise']}  日落 {data['sunset']}", font=font_small, fill=0)
+    draw.text((10, 22), f"{data['city']}", font=font_large, fill=0)
+    draw.text((310, 22), solar, font=font_label, fill=0)
+    draw.text((10, 48), f"日出 {data['sunrise']}  日落 {data['sunset']}", font=font_small, fill=0)
 
-    draw.line([(10, 46), (390, 46)], fill=0)
+    draw.line([(10, 68), (390, 68)], fill=0)
 
-    # === 主温度（大字居中）===
-    draw.text((200, 50), f"{t}°", font=font_display, fill=0, anchor="mt")
-    draw.text((200, 106), w, font=font_mid, fill=0, anchor="mt")
+    # === 主温度（大字居中） ===
+    draw.text((200, 74), f"{t}°", font=font_display, fill=0, anchor="mt")
+    draw.text((200, 130), w, font=font_mid, fill=0, anchor="mt")
 
     # === 今日详情行 ===
-    draw.text((200, 128), f"最高{data['temp_high']}° / 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
-    draw.text((200, 146), f"体感 {data['feel_temp']}   湿度 {data['humidity']}   {data['wind_info']}", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 152), f"最高{data['temp_high']}° / 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 170), f"体感 {data['feel_temp']}   湿度 {data['humidity']}   {data['wind_info']}", font=font_label, fill=0, anchor="mt")
 
-    draw.line([(10, 162), (390, 162)], fill=0)
+    draw.line([(10, 188), (390, 188)], fill=0)
 
     # === 穿衣建议 ===
-    draw.text((10, 166), advice, font=font_small, fill=0)
+    draw.text((10, 194), advice, font=font_small, fill=0)
 
-    draw.line([(10, 184), (390, 184)], fill=0)
+    draw.line([(10, 214), (390, 214)], fill=0)
 
     # === 未来天气：2×2 网格 ===
-    # 列宽=190，左列x=10，右列x=205
-    # 每格高36px，行1 y=188，行2 y=228
     forecasts = data["forecasts"][:4]
     col_x = [10, 205]
-    row_y = [188, 228]
+    row_y = [220, 262]
 
     for i, fc in enumerate(forecasts):
         col = i % 2
@@ -1101,23 +1099,21 @@ def task_weather_dashboard():
         x = col_x[col]
         y = row_y[row]
 
-        # 第1行：日期 + 天气
-        draw.text((x, y), fc["date"][-5:], font=font_mid, fill=0)       # "04-21"
-        draw.text((x+68, y), fc["weather"][:4], font=font_mid, fill=0)  # "小雨"
-        draw.text((x+118, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)  # "18°/13°"
+        # 第1行：日期 + 天气 + 温度
+        draw.text((x, y), fc["date"][-5:], font=font_mid, fill=0)
+        draw.text((x+68, y), fc["weather"][:4], font=font_mid, fill=0)
+        draw.text((x+118, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
 
         # 第2行：体感 + 风 + 湿度
-        draw.text((x, y+20), f"体感{data['feel_temp']}", font=font_forecast, fill=0)
-        draw.text((x+90, y+20), data['wind_info'], font=font_forecast, fill=0)
-        draw.text((x+165, y+20), data['humidity'], font=font_forecast, fill=0)
+        draw.text((x, y+22), f"体感{data['feel_temp']}", font=font_forecast, fill=0)
+        draw.text((x+90, y+22), data['wind_info'], font=font_forecast, fill=0)
+        draw.text((x+165, y+22), data['humidity'], font=font_forecast, fill=0)
 
     # === 底部农历 ===
-    y_bottom = row_y[1] + 40
     if lunar:
-        draw.line([(10, y_bottom), (390, y_bottom)], fill=0)
-        draw.text((10, y_bottom+4), f"农历 {lunar}", font=font_label, fill=0)
+        draw.line([(10, 286), (390, 286)], fill=0)
+        draw.text((10, 290), f"农历 {lunar}", font=font_label, fill=0)
 
-    draw.text((200, 294), "天气 · 每小时更新", font=font_forecast, fill=0, anchor="mt")
     push_image(img, 4)
 
 def get_ithome_news():
