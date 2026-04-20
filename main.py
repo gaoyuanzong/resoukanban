@@ -116,70 +116,142 @@ def push_image(img, page_id):
 
 # ================= 历史今日照片 =================
 def task_history_photo():
-    """从 NAS 照片目录中查找“历史上的今天”的照片"""
-    print("生成 Page 3: 历史今日...")
-    
+    """✨ 历史上的今天 — 年份均衡 + ±10天范围 + EXIF提纯过滤"""
+    print("生成 Page 3: 历史上的今天...")
+
     today = datetime.now()
-    
-    candidates = []
-    processed = 0
-    
+
+    # -------- EXIF 提纯鉴定器 --------
+    def is_real_photo(path):
+        """通过 EXIF Make/Model 鉴定真实照片"""
+        try:
+            img = Image.open(path)
+            exif = img._getexif()
+            if not exif:
+                return False
+            for tag_id, val in exif.items():
+                tag = ExifTags.TAGS.get(tag_id, tag_id)
+                if tag in ('Make', 'Model'):
+                    return True
+            return False
+        except Exception:
+            return False
+
+    def get_shoot_date(path):
+        """从 EXIF 提取拍摄日期"""
+        try:
+            img = Image.open(path)
+            exif = img._getexif()
+            if exif:
+                for tag_id, val in exif.items():
+                    tag = ExifTags.TAGS.get(tag_id, tag_id)
+                    if tag in ('DateTimeOriginal', 'DateTime') and isinstance(val, str) and len(val) >= 10:
+                        return datetime.strptime(val[:10], "%Y:%m:%d")
+        except Exception:
+            pass
+        return None
+
+    def get_day_diff(m1, d1, m2, d2):
+        """计算两个日期在一年中的相隔天数（处理跨年）"""
+        try:
+            d1_d = datetime(2004, m1, d1)
+            d2_d = datetime(2004, m2, d2)
+            diff = abs((d1_d - d2_d).days)
+            return min(diff, 366 - diff)
+        except ValueError:
+            return 999
+
+    # -------- 遍历 NAS --------
+    records_by_year = {}
+    all_records = []
+
     for root, dirs, files in os.walk(NAS_PHOTO_ROOT):
         if '@eaDir' in dirs:
             dirs.remove('@eaDir')
-        
+
         for file in files:
             if not file.lower().endswith(('.jpg', '.jpeg')):
                 continue
-            processed += 1
-            
-            name = file[:8]
-            for sep in ('', '-', '/'):
-                for fmt in ('%Y%m%d', '%Y-%m-%d', '%Y/%m/%d'):
-                    try:
-                        file_date = datetime.strptime(name, fmt)
-                        if file_date.month == today.month and file_date.day == today.day:
-                            candidates.append(os.path.join(root, file))
-                            break
-                    except ValueError:
-                        continue
-                    name = name.replace(sep, '/', 2) if sep else name
-    
-    if not candidates:
-        print("✨ 今日无历史照片，提示上次发回消")
+            full_path = os.path.join(root, file)
+
+            # EXIF 提纯
+            if not is_real_photo(full_path):
+                continue
+
+            # 取拍摄日期
+            shoot_date = get_shoot_date(full_path)
+            if shoot_date is None:
+                continue
+
+            # 排除今年的照片
+            if shoot_date.year == today.year:
+                continue
+
+            rec = {
+                'year': shoot_date.year,
+                'month': shoot_date.month,
+                'day': shoot_date.day,
+                'path': full_path
+            }
+            all_records.append(rec)
+
+            # ±10天范围内
+            diff = get_day_diff(today.month, today.day, shoot_date.month, shoot_date.day)
+            if diff <= 10:
+                yr = shoot_date.year
+                if yr not in records_by_year:
+                    records_by_year[yr] = []
+                records_by_year[yr].append(rec)
+
+    print(f"✨ 得到 {len(all_records)} 张真实照片，其中 {len(records_by_year)} 个年份在±10天范围内")
+
+    # -------- 年份均衡算法（核心亮点）--------
+    chosen_record = None
+    if records_by_year:
+        # 先抽年份，保证每年被抽中的概率均等
+        chosen_year = random.choice(list(records_by_year.keys()))
+        chosen_record = random.choice(records_by_year[chosen_year])
+        print(f"✨ ✨ 历史足迹中: {chosen_year}年 {today.month}月{today.day}日")
+    elif all_records:
+        # fallback 全局随机
+        chosen_record = random.choice(all_records)
+        print(f"✨ ✨ 全局随机取 ({chosen_record['year']}年)")
+    else:
+        print("✨ 今日无历史照片")
         return
-    
-    chosen = random.choice(candidates)
-    basename = os.path.basename(chosen)
-    year = basename[:4]
-    print(f"✨ 历史今日: {year}年 {today.month}月{today.day}日 → {basename}")
-    
-    img = Image.open(chosen)
+
+    chosen_path = chosen_record['path']
+    year = chosen_record['year']
+    print(f"✨ 历史今日: {year}年 {today.month}月{today.day}日 → {os.path.basename(chosen_path)}")
+
+    # -------- 图像处理 --------
+    img = Image.open(chosen_path)
     img = ImageOps.exif_transpose(img)
-    
+
     SCREEN_W, SCREEN_H = 400, 300
     img_ratio = img.width / img.height
     target_ratio = SCREEN_W / SCREEN_H
-    
+
     if img_ratio > target_ratio:
         new_height = SCREEN_H
         new_width = int(new_height * img_ratio)
     else:
         new_width = SCREEN_W
         new_height = int(new_width / img_ratio)
-    
+
     img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
     left = (new_width - SCREEN_W) // 2
     top = (new_height - SCREEN_H) // 2
     img = img.crop((left, top, left + SCREEN_W, top + SCREEN_H))
-    
+
+    # -------- 右下角日期水印 --------
     draw = ImageDraw.Draw(img)
     date_text = f"{year}年{today.month}月{today.day}日"
     try:
         font_date = ImageFont.truetype(FONT_PATH, 14)
     except:
         font_date = font_small
-    
+
     bbox = draw.textbbox((0, 0), date_text, font=font_date)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
@@ -191,7 +263,7 @@ def task_history_photo():
     rect_y2 = SCREEN_H - margin_bottom
     draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=0)
     draw.text((rect_x1 + pad_x, rect_y1 + pad_y), date_text, font=font_date, fill=255)
-    
+
     push_image(img, 3)
 
 def get_hybrid_weather():
