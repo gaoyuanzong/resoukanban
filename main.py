@@ -1065,26 +1065,61 @@ def task_weather_dashboard():
     lunar = get_lunar_or_festival(datetime.now().year, datetime.now().month, datetime.now().day)
     img = new_image()
     draw = ImageDraw.Draw(img)
-    draw.text((10, 8), f"{data['city']} | 杭州", font=font_small, fill=0)
-    draw.text((300, 8), solar, font=font_small, fill=0)
-    draw.text((200, 32), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
-    draw.text((200, 62), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_small, fill=0, anchor="mt")
-    draw.text((10, 86), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_small, fill=0)
-    draw.text((10, 102), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_small, fill=0)
-    draw.line([(10, 118), (390, 118)], fill=0)
-    draw.text((10, 122), advice, font=font_small, fill=0)
+
+    # 顶行：城市 + 节气
+    draw.text((10, 6), f"{data['city']}", font=font_large, fill=0)
+    draw.text((310, 6), solar, font=font_label, fill=0)
+
+    # 主温度（大字）
+    draw.text((200, 36), f"{t}°", font=font_display, fill=0, anchor="mt")
+    draw.text((200, 88), w, font=font_mid, fill=0, anchor="mt")
+
+    # 高低/体感
+    draw.text((200, 108), f"最高{data['temp_high']}° | 最低{data['temp_low']}°", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 125), f"体感 {data['feel_temp']}", font=font_label, fill=0, anchor="mt")
+
     draw.line([(10, 140), (390, 140)], fill=0)
-    y = 150
-    for fc in data["forecasts"]:
-        md = fc["date"][-5:]  # e.g. "04-21"
-        draw.text((10, y), md, font=font_small, fill=0)
-        draw.text((80, y), fc["weather"][:6], font=font_small, fill=0)
-        draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_small, fill=0)
-        y += 17
+
+    # 湿度 + 风
+    draw.text((10, 144), f"湿度 {data['humidity']}", font=font_label, fill=0)
+    draw.text((130, 144), data['wind_info'], font=font_label, fill=0)
+
+    # 日出 + 日落
+    draw.text((310, 144), f"日出 {data['sunrise']}", font=font_label, fill=0)
+    draw.text((380, 144), f"日落 {data['sunset']}", font=font_label, fill=0, anchor="rt")
+
+    draw.line([(10, 164), (390, 164)], fill=0)
+
+    # 穿衣建议
+    draw.text((200, 170), advice, font=font_label, fill=0, anchor="mt")
+
+    draw.line([(10, 190), (390, 190)], fill=0)
+
+    # 未来天气：2x2 网格布局
+    forecasts = data["forecasts"][:4]
+    cols = 2
+    cell_w = 195
+    cell_h = 46
+    start_x = [10, 205]
+    start_y = 196
+
+    for i, fc in enumerate(forecasts):
+        col = i % cols
+        row = i // cols
+        x = start_x[col]
+        y = start_y + row * cell_h
+        md = fc["date"][-5:]
+        draw.text((x, y), md, font=font_mid, fill=0)
+        draw.text((x, y+22), f"{fc['weather']}  {fc['temp_high']}°/{fc['temp_low']}°", font=font_label, fill=0)
+
+    y_bottom = start_y + 2 * cell_h
+
+    # 农历
     if lunar:
-        draw.line([(10, 218), (390, 218)], fill=0)
-        draw.text((10, 222), f"农历 {lunar}", font=font_small, fill=0)
-    draw.text((200, 285), "天气 · 每小时更新", font=font_small, fill=0, anchor="mt")
+        draw.line([(10, y_bottom), (390, y_bottom)], fill=0)
+        draw.text((10, y_bottom+4), f"农历 {lunar}", font=font_label, fill=0)
+
+    draw.text((200, 294), "天气 · 每小时更新", font=font_label, fill=0, anchor="mt")
     push_image(img, 4)
 
 def get_ithome_news():
