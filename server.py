@@ -100,7 +100,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
   <div class="sidebar">
     <h3>📋 Page 3 模式</h3>
     <div id="modeList"></div>
-    <h3 style="margin-top:20px">📋 Page 4</h3>
+    <h3 style="margin-top:20px">📋 Page 4 天气</h3>
     <div>
       <button class="mode-btn" onclick="selectMode('weather', 4)" id="btn-weather">
         <span class="id">weather</span>
@@ -131,6 +131,16 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     </div>
 
     <div class="panel-section">
+      <h4>🎨 天气布局</h4>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="tab" id="tab-standard" onclick="setLayout('standard')">标准</button>
+        <button class="tab" id="tab-compact" onclick="setLayout('compact')">紧凑</button>
+        <button class="tab" id="tab-full" onclick="setLayout('full')">全屏</button>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:6px">选中后点击"刷新预览"查看效果</div>
+    </div>
+
+    <div class="panel-section">
       <h4>📜 推送历史</h4>
       <div class="history-list" id="historyList"></div>
     </div>
@@ -142,6 +152,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 <script>
 let currentMode = null;
 let currentPage = 3;
+let currentLayout = 'standard';
 
 function $(id) { return document.getElementById(id); }
 
@@ -228,9 +239,18 @@ async function selectMode(id, page) {
 async function refreshPreview() {
   if (!currentMode) return;
   const img = $('previewImg');
-  img.src = '/api/preview?mode=' + encodeURIComponent(currentMode) + '&page=' + currentPage + '&t=' + Date.now();
+  const mode = currentMode === 'weather' ? 'weather' : currentMode;
+  const url = '/api/preview?mode=' + encodeURIComponent(mode) + '&page=' + currentPage + '&layout=' + currentLayout + '&t=' + Date.now();
+  img.src = url;
   img.style.display = 'block';
   $('previewPlaceholder').style.display = 'none';
+}
+
+function setLayout(l) {
+  currentLayout = l;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  $('tab-' + l).classList.add('active');
+  refreshPreview();
 }
 
 async function pushPage(page) {
@@ -239,7 +259,7 @@ async function pushPage(page) {
   const btn = page === 3 ? $('btnPushP3') : $('btnPushP4');
   btn.disabled = true;
   btn.textContent = '⏳ 推送中...';
-  const r = await api(`/api/push?mode=${encodeURIComponent(targetMode)}&page=${page}`);
+  const r = await api(`/api/push?mode=${encodeURIComponent(targetMode)}&page=${page}&layout=${currentLayout}`);
   btn.disabled = false;
   btn.textContent = '▶ 推送 Page ' + page;
   if (r.ok) {
@@ -272,8 +292,9 @@ def api_modes():
 def api_preview():
     mode = request.args.get('mode', 'jokes')
     page = int(request.args.get('page', 3))
+    layout = request.args.get('layout', 'standard')
     try:
-        png_bytes = get_mode_preview_png(mode, page)
+        png_bytes = get_mode_preview_png(mode, page, layout)
         from io import BytesIO
         buf = BytesIO(png_bytes)
         buf.seek(0)
@@ -289,7 +310,8 @@ def api_preview():
 def api_push():
     mode = request.args.get('mode', 'jokes')
     page = int(request.args.get('page', 3))
-    result = push_mode(mode, page)
+    layout = request.args.get('layout', 'standard')
+    result = push_mode(mode, page, layout=layout)
     if result.get("ok"):
         return jsonify(result)
     else:

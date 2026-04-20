@@ -1029,8 +1029,12 @@ def get_hybrid_weather():
         pass
     return result
 
-def task_weather_dashboard(cfg=None, history=None):
-    print("生成 Page 4: 天气看板...")
+def task_weather_dashboard(cfg=None, history=None, layout="standard"):
+    """
+    生成 Page 4 天气看板
+    layout: standard=标准布局, compact=紧凑布局, full=全屏大字
+    """
+    print(f"生成 Page 4: 天气看板 ({layout} layout)...")
     img = Image.new('1', (400, 300), color=255)
     draw = ImageDraw.Draw(img)
 
@@ -1040,9 +1044,20 @@ def task_weather_dashboard(cfg=None, history=None):
         push_image(img, 4)
         return
 
+    if layout == "compact":
+        _render_weather_compact(draw, weather)
+    elif layout == "full":
+        _render_weather_full(draw, weather)
+    else:
+        _render_weather_standard(draw, weather)
+
+    push_image(img, 4)
+
+
+def _render_weather_standard(draw, weather):
+    """标准布局"""
     # === 城市名 + 更新时间 ===
     draw.text((20, 10), weather["city"], font=font_title, fill=0)
-
     now_beijing = datetime.utcnow() + timedelta(hours=8)
     update_time = now_beijing.strftime("%H:%M")
     time_text = f"更新 {update_time}"
@@ -1055,7 +1070,7 @@ def task_weather_dashboard(cfg=None, history=None):
     draw.text((25, 100), f"{weather['temp_low']}°/{weather['temp_high']}°", font=font_item, fill=0)
     draw.text((150, 45), weather["weather"], font=font_36, fill=0)
 
-    # === 右侧信息框（圆角矩形）===
+    # === 右侧信息框 ===
     draw.rounded_rectangle([(235, 45), (385, 130)], radius=8, outline=0, fill=0)
     draw.text((245, 45), weather["wind_info"], font=font_small, fill=255)
     draw.text((245, 70), f"湿度 {weather['humidity']}", font=font_small, fill=255)
@@ -1067,7 +1082,7 @@ def task_weather_dashboard(cfg=None, history=None):
     # === 分隔线 ===
     draw.line([(20, 160), (380, 160)], fill=0, width=1)
 
-    # === 2天预报（左：第2天，右：第3天）===
+    # === 2天预报 ===
     x_positions = [30, 200]
     for i, day in enumerate(weather["forecasts"][:2]):
         x = x_positions[i]
@@ -1082,10 +1097,90 @@ def task_weather_dashboard(cfg=None, history=None):
     for i, line in enumerate(advice_lines[:2]):
         draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
 
-    push_image(img, 4)
 
-    if history:
-        history.record(page=4, mode="weather", pushed=True)
+def _render_weather_compact(draw, weather):
+    """紧凑布局：顶部大字温度，4天预报网格"""
+    # 城市 + 日出日落
+    draw.text((10, 6), weather["city"], font=font_large, fill=0)
+    draw.text((10, 30), f"日出 {weather['sunrise']}  日落 {weather['sunset']}", font=font_small, fill=0)
+    draw.line([(10, 46), (390, 46)], fill=0)
+
+    # 主温度
+    draw.text((200, 50), f"{weather['temp_curr']}°", font=font_display, fill=0, anchor="mt")
+    draw.text((200, 105), weather["weather"], font=font_mid, fill=0, anchor="mt")
+
+    # 今日详情
+    draw.text((200, 128), f"最高{weather['temp_high']}° / 最低{weather['temp_low']}°", font=font_label, fill=0, anchor="mt")
+    draw.text((200, 146), f"体感 {weather['feel_temp']}", font=font_label, fill=0, anchor="mt")
+
+    draw.line([(10, 162), (390, 162)], fill=0)
+
+    # 4天预报 2x2 网格
+    draw.text((10, 166), f"湿度 {weather['humidity']}  {weather['wind_info']}", font=font_label, fill=0)
+    draw.line([(10, 184), (390, 184)], fill=0)
+
+    fc = weather["forecasts"][:4]
+    cols = 2
+    for i in range(4):
+        if i >= len(fc):
+            break
+        col = i % cols
+        row = i // cols
+        x = [10, 205][col]
+        y = 190 + row * 36
+        d = fc[i]
+        draw.text((x, y), d["date"][-5:], font=font_mid, fill=0)
+        draw.text((x, y+20), f"{d['weather']}  {d['temp_low']}°/{d['temp_high']}°", font=font_forecast, fill=0)
+
+    # 穿衣
+    draw.line([(10, 262), (390, 262)], fill=0)
+    advice = get_clothing_advice(weather["temp_curr"])
+    draw.text((10, 266), advice[:30], font=font_label, fill=0)
+
+
+def _render_weather_full(draw, weather):
+    """全屏大字布局"""
+    # 城市 + 节气
+    draw.text((10, 6), weather["city"], font=font_large, fill=0)
+    draw.text((310, 6), f"更新 {datetime.utcnow().strftime('%H:%M')}", font=font_small, fill=0)
+    draw.line([(10, 24), (390, 24)], fill=0)
+
+    # 超大温度
+    draw.text((200, 26), f"{weather['temp_curr']}°", font=font_display, fill=0, anchor="mt")
+    draw.text((200, 84), weather["weather"], font=font_mid, fill=0, anchor="mt")
+
+    # 横向详情条
+    draw.text((10, 108), f"最高 {weather['temp_high']}°", font=font_label, fill=0)
+    draw.text((140, 108), f"最低 {weather['temp_low']}°", font=font_label, fill=0)
+    draw.text((260, 108), f"体感 {weather['feel_temp']}", font=font_label, fill=0)
+    draw.text((10, 126), f"湿度 {weather['humidity']}", font=font_label, fill=0)
+    draw.text((140, 126), weather["wind_info"], font=font_label, fill=0)
+    draw.text((260, 126), f"日出 {weather['sunrise']}", font=font_label, fill=0)
+    draw.text((350, 126), f"日落 {weather['sunset']}", font=font_label, fill=0, anchor="rt")
+
+    draw.line([(10, 144), (390, 144)], fill=0)
+
+    # 4天预报
+    fc = weather["forecasts"][:4]
+    for i in range(4):
+        if i >= len(fc):
+            break
+        d = fc[i]
+        col = i % 2
+        row = i // 2
+        x = [10, 205][col]
+        y = 150 + row * 50
+        draw.text((x, y), d["date"][-5:], font=font_mid, fill=0)
+        draw.text((x+65, y), d["weather"][:4], font=font_mid, fill=0)
+        draw.text((x+130, y), f"{d['temp_high']}°/{d['temp_low']}°", font=font_label, fill=0)
+        draw.text((x, y+22), f"体感 {weather['feel_temp']}", font=font_forecast, fill=0)
+        draw.text((x+90, y+22), weather["wind_info"], font=font_forecast, fill=0)
+        draw.text((x+165, y+22), weather["humidity"], font=font_forecast, fill=0)
+
+    # 穿衣
+    draw.line([(10, 250), (390, 250)], fill=0)
+    advice = get_clothing_advice(weather["temp_curr"])
+    draw.text((10, 255), advice[:36], font=font_label, fill=0)
 
 def get_ithome_news():
     try:
@@ -1221,6 +1316,6 @@ if __name__ == "__main__":
             pass
 
     if cfg.is_page_enabled(4):
-        task_weather_dashboard(cfg, history)
+        task_weather_dashboard(cfg, history, layout=cfg.page4_layout)
 
     print("所有任务执行完毕！")

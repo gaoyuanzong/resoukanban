@@ -40,12 +40,12 @@ def get_modes():
     return [(mid, name) for mid, name, _ in modes]
 
 
-def get_mode_preview_png(mode_id: str, page: int = 3) -> bytes:
+def get_mode_preview_png(mode_id: str, page: int = 3, layout: str = "standard") -> bytes:
     """
     生成指定模式的预览 PNG，返回 bytes
-    使用缓存：相同 mode_id + page 只生成一次
+    使用缓存：相同 mode_id + page + layout 只生成一次
     """
-    cache_key = f"{mode_id}_p{page}"
+    cache_key = f"{mode_id}_p{page}_{layout}"
     cache_file = PREVIEW_CACHE_DIR / f"{cache_key}.png"
 
     # 缓存命中
@@ -91,9 +91,9 @@ def get_mode_preview_png(mode_id: str, page: int = 3) -> bytes:
             found = True
             break
 
-    # weather 特殊处理
+    # weather 特殊处理（支持 layout 参数）
     if mode_id == "weather":
-        mod.task_weather_dashboard()
+        mod.task_weather_dashboard(layout=layout)
         found = True
 
     if not found:
@@ -112,7 +112,7 @@ def get_mode_preview_png(mode_id: str, page: int = 3) -> bytes:
     return tmp.read_bytes()
 
 
-def push_mode(mode_id: str, page: int = 3, config_path: str = None) -> dict:
+def push_mode(mode_id: str, page: int = 3, config_path: str = None, layout: str = None) -> dict:
     """
     推送指定模式到墨水屏，返回结果 dict
     """
@@ -173,7 +173,20 @@ def push_mode(mode_id: str, page: int = 3, config_path: str = None) -> dict:
                 history.record(page=page, mode=mid, pushed=False)
                 result["error"] = str(e)
                 print(f"[API] push {mid} failed: {e}")
-            break
+            return result  # 找到就返回
+
+    # weather 特殊处理（weather不在MODES里，单独处理）
+    if mode_id == "weather":
+        lay = layout or (cfg.page4_layout if cfg else "standard")
+        try:
+            mod.task_weather_dashboard(layout=lay)
+            history.record(page=page, mode="weather", pushed=True)
+            result["ok"] = True
+            print(f"[API] pushed weather ({lay}) to Page {page}")
+        except Exception as e:
+            history.record(page=page, mode="weather", pushed=False)
+            result["error"] = str(e)
+            print(f"[API] push weather failed: {e}")
 
     return result
 
