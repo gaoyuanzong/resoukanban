@@ -1,8 +1,13 @@
+"""
+24模式随机转盘 - 墨水屏看板
+每次运行随机选择一个模式推送到 Page 3
+"""
 import os
 import random
 import requests
 import calendar
 import re
+import subprocess
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
 from datetime import datetime, timedelta
 from zhdate import ZhDate
@@ -12,12 +17,9 @@ API_KEY = os.environ.get("ZECTRIX_API_KEY")
 MAC_ADDRESS = os.environ.get("ZECTRIX_MAC")
 PUSH_URL = f"https://cloud.zectrix.com/open/v1/devices/{MAC_ADDRESS}/display/image"
 
-# 高德配置（津南区）
 AMAP_KEY = os.environ.get("AMAP_WEATHER_KEY")
-ADCODE = "330110"  # 津南区
+ADCODE = "330110"
 
-
-# NAS 照片路径
 NAS_PHOTO_ROOT = "/nas/admin/Photos"
 
 FONT_PATH = "font.ttf"
@@ -34,6 +36,911 @@ except:
     exit(1)
 
 HEADERS = {'User-Agent': 'Mozilla/5.0'}
+CCGEN_DIR = "/tmp/ccgen"
+os.makedirs(CCGEN_DIR, exist_ok=True)
+
+# ================= 工具函数 =================
+
+def ccgen(prompt, filename):
+    """调用 Claude Code 生成文本内容到文件"""
+    output = os.path.join(CCGEN_DIR, filename)
+    workdir = "/tmp/cc-gen-work"
+    os.makedirs(workdir, exist_ok=True)
+    cmd = [
+        "claude", "--permission-mode", "bypassPermissions", "--print",
+        f"{prompt}。直接输出纯文本，不要markdown代码块，不要任何前缀说明，直接把内容写入文件：{output}"
+    ]
+    try:
+        result = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            return output
+    except Exception as e:
+        print(f"ccgen 失败: {e}")
+    return None
+
+def read_ccgen(filename):
+    """读取 ccgen 生成的文件内容"""
+    path = os.path.join(CCGEN_DIR, filename)
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip()]
+    return []
+
+def push_image(img, page_id):
+    img.save(f"page_{page_id}.png")
+    api_headers = {"X-API-Key": API_KEY}
+    files = {"images": (f"page_{page_id}.png", open(f"page_{page_id}.png", "rb"), "image/png")}
+    data = {"dither": "true", "pageId": str(page_id)}
+    try:
+        res = requests.post(PUSH_URL, headers=api_headers, files=files, data=data)
+        print(f"Page {page_id} 推送成功: {res.status_code}")
+    except Exception as e:
+        print(f"Page {page_id} 推送失败: {e}")
+
+def new_image():
+    return Image.new('1', (400, 300), color=255)
+
+# ================= 24模式定义 =================
+
+MODES = []  # [(mode_id, name, func), ...]
+
+def mode_register(mid, name):
+    """装饰器：注册模式"""
+    def deco(func):
+        MODES.append((mid, name, func))
+        return func
+    return deco
+
+# ================= 模式1: 历史今日照片 =================
+@mode_register("history_photo", "历史今日照片")
+def mode_history_photo():
+    """从 NAS 照片中挑选'历史上的今天'拍摄的照片"""
+    today = datetime.now()
+
+    def is_real_photo(path):
+        try:
+            img = Image.open(path)
+            exif = img._getexif()
+            if not exif:
+                return False
+            for tag_id, val in exif.items():
+                tag = ExifTags.TAGS.get(tag_id, tag_id)
+                if tag in ('Make', 'Model'):
+                    return True
+            return False
+        except:
+            return False
+
+    def get_shoot_date(path):
+        try:
+            img = Image.open(path)
+            exif = img._getexif()
+            if exif:
+                for tag_id, val in exif.items():
+                    tag = ExifTags.TAGS.get(tag_id, tag_id)
+                    if tag in ('DateTimeOriginal', 'DateTime') and isinstance(val, str) and len(val) >= 10:
+                        return datetime.strptime(val[:10], "%Y:%m:%d")
+        except:
+            pass
+        return None
+
+    def get_day_diff(m1, d1, m2, d2):
+        try:
+            d1_d = datetime(2004, m1, d1)
+            d2_d = datetime(2004, m2, d2)
+            diff = abs((d1_d - d2_d).days)
+            return min(diff, 366 - diff)
+        except:
+            return 999
+
+    records_by_year = {}
+    all_records = []
+
+    for root, dirs, files in os.walk(NAS_PHOTO_ROOT):
+        if '@eaDir' in dirs:
+            dirs.remove('@eaDir')
+        for file in files:
+            if not file.lower().endswith(('.jpg', '.jpeg')):
+                continue
+            full_path = os.path.join(root, file)
+            if not is_real_photo(full_path):
+                continue
+            shoot_date = get_shoot_date(full_path)
+            if shoot_date is None:
+                continue
+            if shoot_date.year == today.year:
+                continue
+            rec = {'year': shoot_date.year, 'path': full_path}
+            all_records.append(rec)
+            diff = get_day_diff(today.month, today.day, shoot_date.month, shoot_date.day)
+            if diff <= 10:
+                yr = shoot_date.year
+                if yr not in records_by_year:
+                    records_by_year[yr] = []
+                records_by_year[yr].append(rec)
+
+    chosen_record = None
+    if records_by_year:
+        chosen_year = random.choice(list(records_by_year.keys()))
+        chosen_record = random.choice(records_by_year[chosen_year])
+    elif all_records:
+        chosen_record = random.choice(all_records)
+    else:
+        print("✨ 今日无历史照片")
+        return
+
+    chosen_path = chosen_record['path']
+    year = chosen_record['year']
+    print(f"✨ 历史今日: {year}年{today.month}月{today.day}日 → {os.path.basename(chosen_path)}")
+
+    img = Image.open(chosen_path)
+    img = ImageOps.exif_transpose(img)
+    SCREEN_W, SCREEN_H = 400, 300
+    img_ratio = img.width / img.height
+    target_ratio = SCREEN_W / SCREEN_H
+    if img_ratio > target_ratio:
+        new_height = SCREEN_H
+        new_width = int(new_height * img_ratio)
+    else:
+        new_width = SCREEN_W
+        new_height = int(new_width / img_ratio)
+    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    left = (new_width - SCREEN_W) // 2
+    top = (new_height - SCREEN_H) // 2
+    img = img.crop((left, top, left + SCREEN_W, top + SCREEN_H))
+
+    draw = ImageDraw.Draw(img)
+    date_text = f"{year}年{today.month}月{today.day}日"
+    try:
+        font_date = ImageFont.truetype(FONT_PATH, 14)
+    except:
+        font_date = font_small
+    bbox = draw.textbbox((0, 0), date_text, font=font_date)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    pad_x, pad_y = 6, 4
+    margin_right, margin_bottom = 8, 8
+    rect_x1 = SCREEN_W - tw - pad_x * 2 - margin_right
+    rect_y1 = SCREEN_H - th - pad_y * 2 - margin_bottom
+    rect_x2 = SCREEN_W - margin_right
+    rect_y2 = SCREEN_H - margin_bottom
+    draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=0)
+    draw.text((rect_x1 + pad_x, rect_y1 + pad_y), date_text, font=font_date, fill=255)
+    push_image(img, 3)
+
+# ================= 模式2: 节日倒计时 =================
+@mode_register("countdown", "节日倒计时")
+def mode_countdown():
+    """显示距离下一个重要节日的倒计时"""
+    today = datetime.now()
+    year = today.year
+
+    festivals = [
+        (1, 1, "元旦"),
+        (2, 14, "情人节"),
+        (3, 8, "妇女节"),
+        (4, 1, "愚人节"),
+        (4, 20, "世界读书日"),
+        (5, 1, "劳动节"),
+        (5, 4, "青年节"),
+        (6, 1, "儿童节"),
+        (7, 1, "建党节"),
+        (8, 1, "建军节"),
+        (9, 10, "教师节"),
+        (10, 1, "国庆节"),
+        (10, 31, "万圣节前夜"),
+        (11, 11, "双十一"),
+        (12, 24, "平安夜"),
+        (12, 25, "圣诞节"),
+    ]
+
+    next_festival = None
+    min_diff = 999
+    for m, d, name in festivals:
+        try:
+            fdate = datetime(year, m, d)
+            diff = (fdate - today).days
+            if diff > 0 and diff < min_diff:
+                min_diff = diff
+                next_festival = (m, d, name, fdate)
+        except:
+            pass
+
+    if next_festival is None or min_diff > 60:
+        for m, d, name in festivals:
+            try:
+                fdate = datetime(year + 1, m, d)
+                diff = (fdate - today).days
+                if diff > 0 and diff < min_diff:
+                    min_diff = diff
+                    next_festival = (m, d, name, fdate)
+            except:
+                pass
+
+    m, d, name, fdate = next_festival
+    diff = min_diff
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    title = "距离下一个节日还有"
+    draw.text((200, 30), title, font=font_small, fill=0, anchor="mt")
+    draw.text((200, 55), name, font=font_title, fill=0, anchor="mt")
+
+    num_text = str(diff)
+    font_num = ImageFont.truetype(FONT_PATH, 72)
+    bbox = draw.textbbox((0, 0), num_text, font=font_num)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    draw.text((200, 130), num_text, font=font_num, fill=0, anchor="mt")
+
+    draw.text((200, 210), "天", font=font_title, fill=0, anchor="mt")
+
+    date_str = f"{m}月{d}日" if m != 12 or d != 25 else "12月25日"
+    draw.text((200, 250), date_str, font=font_small, fill=0, anchor="mt")
+
+    push_image(img, 3)
+
+# ================= 模式3: 年进度 =================
+@mode_register("year_progress", "年进度")
+def mode_year_progress():
+    """显示今年的进度百分比"""
+    today = datetime.now()
+    start = datetime(today.year, 1, 1)
+    end = datetime(today.year + 1, 1, 1)
+    total_days = (end - start).days
+    elapsed = (today - start).days
+    pct = elapsed / total_days * 100
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 30), f"{today.year}年进度", font=font_title, fill=0, anchor="mt")
+
+    pct_str = f"{pct:.1f}%"
+    font_big = ImageFont.truetype(FONT_PATH, 56)
+    bbox = draw.textbbox((0, 0), pct_str, font=font_big)
+    tw = bbox[2] - bbox[0]
+    draw.text((200, 90), pct_str, font=font_big, fill=0, anchor="mt")
+
+    bar_w = 360
+    bar_h = 20
+    bar_x = (400 - bar_w) // 2
+    bar_y = 170
+    draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], outline=0)
+    filled = int(bar_w * pct / 100)
+    draw.rectangle([bar_x, bar_y, bar_x + filled, bar_y + bar_h], fill=0)
+
+    day_str = f"第{elapsed}天 / 共{total_days}天"
+    draw.text((200, 210), day_str, font=font_item, fill=0, anchor="mt")
+
+    month_str = f"{today.month}月{today.day}日 {calendar.day_name[today.weekday()]}"
+    draw.text((200, 245), month_str, font=font_small, fill=0, anchor="mt")
+
+    push_image(img, 3)
+
+# ================= 模式4: 早安语/晚安语 =================
+@mode_register("greeting", "早安语/晚安语")
+def mode_greeting():
+    """根据时间段显示早安、午安、晚安语"""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        title = "早安"
+        msgs = [
+            "新的一天，从微笑开始。早安！",
+            "早起的你，已经赢在起跑线。",
+            "阳光正好，今天一定有好事发生。",
+            "早安！今天的你很好看。",
+            "早起一刻钟，整天都轻松。",
+        ]
+    elif 12 <= hour < 18:
+        title = "午安"
+        msgs = [
+            "午休片刻，下午更有精神。",
+            "午安！吃顿好饭，犒赏自己。",
+            "下午好，记得补充水分。",
+            "午安！半天的努力很棒。",
+            "休息是为了走更远的路。",
+        ]
+    else:
+        title = "晚安"
+        msgs = [
+            "晚安，好梦。明天见。",
+            "今天辛苦了，晚安休息吧。",
+            "放下所有烦恼，安睡到天亮。",
+            "晚安！愿你有个好梦。",
+            "今天的你已经做得很好了。",
+        ]
+
+    msg = random.choice(msgs)
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 50), title, font=font_huge, fill=0, anchor="mt")
+
+    draw.text((200, 150), msg, font=font_item, fill=0, anchor="mt")
+
+    time_str = datetime.now().strftime("%H:%M")
+    draw.text((200, 260), time_str, font=font_small, fill=0, anchor="mt")
+
+    push_image(img, 3)
+
+# ================= 模式5: 每日诗词 =================
+@mode_register("poetry", "每日诗词")
+def mode_poetry():
+    """通过 ccgen 生成古诗词并渲染"""
+    ccgen("请生成5首经典中国古诗词（唐诗或宋词），每首包含：诗题、作者（朝代·姓名）、正文（4句，每句一行），每首之间用空行分隔。格式示例：\n静夜思\n唐·李白\n床前明月光\n疑是地上霜\n举头望明月\n低头思故乡\n\n（第二首...）直接输出纯文本", "poetry.txt")
+
+    lines = read_ccgen("poetry.txt")
+    if not lines:
+        print("✨诗词生成失败，使用默认")
+        lines = ["春眠不觉晓","处处闻啼鸟","夜来风雨声","花落知多少"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 20), "每日诗词", font=font_title, fill=0, anchor="mt")
+
+    y = 60
+    display_lines = [l for l in lines[:12] if l.strip()]
+    for line in display_lines[:8]:
+        line = line.strip()
+        if not line:
+            y += 8
+            continue
+        if len(line) > 12:
+            font_use = font_small
+        else:
+            font_use = font_item
+        draw.text((200, y), line, font=font_use, fill=0, anchor="mt")
+        y += 22
+
+    push_image(img, 3)
+
+# ================= 模式6: 笑话 =================
+@mode_register("jokes", "每日笑话")
+def mode_jokes():
+    """通过 ccgen 生成笑话并渲染"""
+    ccgen("请生成8个幽默中文笑话，每个不超过25字，一行一个笑话，不要编号，直接输出纯文本", "jokes.txt")
+
+    lines = read_ccgen("jokes.txt")
+    if not lines:
+        lines = ["笑话生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "今日笑话 😄", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:10]:
+        line = line.strip()
+        if not line:
+            continue
+        font_use = font_small if len(line) > 15 else font_item
+        draw.text((10, y), f"· {line}", font=font_use, fill=0)
+        y += 22
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式7: 冷知识 =================
+@mode_register("cold_knowledge", "冷知识")
+def mode_cold_knowledge():
+    """通过 ccgen 生成冷知识"""
+    ccgen("请生成8条有趣的生活冷知识/小窍门，每条不超过20字，一行一条，直接输出纯文本", "cold_knowledge.txt")
+
+    lines = read_ccgen("cold_knowledge.txt")
+    if not lines:
+        lines = ["冷知识生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "生活冷知识 💡", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:10]:
+        line = line.strip()
+        if not line:
+            continue
+        font_use = font_small if len(line) > 15 else font_item
+        draw.text((10, y), f"· {line}", font=font_use, fill=0)
+        y += 22
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式8: 历史上的今天 =================
+@mode_register("thisday", "历史上的今天")
+def mode_thisday():
+    """通过 ccgen 生成历史上的今天事件"""
+    today = datetime.now()
+    ccgen(f"请生成5条{ today.month }月{ today.day }日历史上发生的重大事件，每条不超过25字，一行一条，直接输出纯文本", "thisday.txt")
+
+    lines = read_ccgen("thisday.txt")
+    if not lines:
+        lines = ["历史事件生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    title = f"{today.month}月{today.day}日 历史上的今天"
+    draw.text((200, 15), title, font=font_small, fill=0, anchor="mt")
+
+    y = 45
+    for line in lines[:8]:
+        line = line.strip()
+        if not line:
+            continue
+        draw.text((10, y), f"· {line}", font=font_small, fill=0)
+        y += 26
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式9: 脑筋急转弯 =================
+@mode_register("riddle", "脑筋急转弯")
+def mode_riddle():
+    """通过 ccgen 生成脑筋急转弯"""
+    ccgen("请生成5个脑筋急转弯，每条格式：问题？|答案，用'|'分隔问题与答案，直接输出纯文本，一行一组", "riddle.txt")
+
+    lines = read_ccgen("riddle.txt")
+    if not lines:
+        lines = ["脑筋急转弯生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 10), "脑筋急转弯 🧠", font=font_title, fill=0, anchor="mt")
+
+    y = 48
+    for line in lines[:6]:
+        line = line.strip()
+        if '|' not in line:
+            continue
+        q, a = line.split('|', 1)
+        font_use = font_small if len(q) > 18 else font_item
+        draw.text((10, y), f"问: {q}", font=font_use, fill=0)
+        y += 20
+        draw.text((10, y), f"答: {a}", font=font_small, fill=0)
+        y += 28
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式10: 每日语录 =================
+@mode_register("quote", "每日语录")
+def mode_quote():
+    """通过 ccgen 生成名人语录"""
+    ccgen("请生成5条中英文名人语录，每条格式：'语录内容' — 作者，一行一条，直接输出纯文本", "quote.txt")
+
+    lines = read_ccgen("quote.txt")
+    if not lines:
+        lines = ["语录生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "每日语录 📖", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:6]:
+        line = line.strip()
+        if not line:
+            continue
+        font_use = font_small if len(line) > 22 else font_item
+        draw.text((10, y), line, font=font_use, fill=0)
+        y += 30
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式11: 英文单词 =================
+@mode_register("word", "每日单词")
+def mode_word():
+    """通过 ccgen 生成每日英语单词"""
+    ccgen("请生成8个常用英语单词及其中文释义，格式：word - 中文释义，一行一个，直接输出纯文本", "word.txt")
+
+    lines = read_ccgen("word.txt")
+    if not lines:
+        lines = ["单词生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "每日单词 📚", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:8]:
+        line = line.strip()
+        if not line or ' - ' not in line:
+            continue
+        word, meaning = line.split(' - ', 1)
+        draw.text((10, y), word.strip(), font=font_item, fill=0)
+        draw.text((200, y), meaning.strip(), font=font_small, fill=0)
+        y += 26
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式12: 人生感悟 =================
+@mode_register("wisdom", "人生感悟")
+def mode_wisdom():
+    """通过 ccgen 人生感悟句子"""
+    ccgen("请生成6条人生感悟/哲理句子，每条不超过20字，一行一条，直接输出纯文本", "wisdom.txt")
+
+    lines = read_ccgen("wisdom.txt")
+    if not lines:
+        lines = ["感悟生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "人生感悟 🌿", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:8]:
+        line = line.strip()
+        if not line:
+            continue
+        font_use = font_small if len(line) > 16 else font_item
+        draw.text((10, y), f"· {line}", font=font_use, fill=0)
+        y += 28
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式13: 天气养生 =================
+@mode_register("health", "天气养生")
+def mode_health():
+    """通过 ccgen 根据天气生成养生建议"""
+    ccgen("请生成6条根据当前天气（春季）的生活养生小贴士，每条不超过20字，一行一条，直接输出纯文本", "health.txt")
+
+    lines = read_ccgen("health.txt")
+    if not lines:
+        lines = ["养生建议生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "天气养生 🌿", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:8]:
+        line = line.strip()
+        if not line:
+            continue
+        font_use = font_small if len(line) > 16 else font_item
+        draw.text((10, y), f"· {line}", font=font_use, fill=0)
+        y += 28
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式14: 时令菜谱 =================
+@mode_register("recipe", "时令菜谱")
+def mode_recipe():
+    """通过 ccgen 生成时令菜谱"""
+    ccgen("请生成4道时令家常菜谱，每道包含：菜名 + 一句话做法，用'｜'分隔，格式示例：番茄炒蛋｜简单快手，两分钟出锅。一行一道菜，直接输出纯文本", "recipe.txt")
+
+    lines = read_ccgen("recipe.txt")
+    if not lines:
+        lines = ["菜谱生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "时令菜谱 🍳", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:6]:
+        line = line.strip()
+        if not line or '｜' not in line:
+            continue
+        name, desc = line.split('｜', 1)
+        draw.text((10, y), f"▪ {name.strip()}", font=font_item, fill=0)
+        y += 20
+        draw.text((10, y), f"  {desc.strip()}", font=font_small, fill=0)
+        y += 30
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式15: 每日书目 =================
+@mode_register("book", "每日书目")
+def mode_book():
+    """通过 ccgen 推荐每日书籍"""
+    ccgen("请生成3本推荐书籍，每本包含：书名、作者、一句话推荐理由，用'｜'分隔，格式示例：活着｜余华｜人生的无奈与坚韧。一行一本，直接输出纯文本", "book.txt")
+
+    lines = read_ccgen("book.txt")
+    if not lines:
+        lines = ["书目生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "每日书目 📚", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:5]:
+        line = line.strip()
+        if not line or '｜' not in line:
+            continue
+        parts = line.split('｜')
+        name = parts[0].strip()
+        author = parts[1].strip() if len(parts) > 1 else ""
+        reason = parts[2].strip() if len(parts) > 2 else ""
+        draw.text((10, y), f"📖 {name}", font=font_item, fill=0)
+        y += 20
+        if author:
+            draw.text((10, y), f"  {author}", font=font_small, fill=0)
+            y += 18
+        if reason:
+            draw.text((10, y), f"  {reason}", font=font_small, fill=0)
+            y += 22
+        y += 6
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式16: 百科问答 =================
+@mode_register("qa", "百科问答")
+def mode_qa():
+    """通过 ccgen 生成有趣的百科问答"""
+    ccgen("请生成4个有趣的百科知识问答，每组格式：问题？|答案，用'|'分隔，直接输出纯文本，一行一组", "qa.txt")
+
+    lines = read_ccgen("qa.txt")
+    if not lines:
+        lines = ["问答生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "百科问答 ❓", font=font_title, fill=0, anchor="mt")
+
+    y = 48
+    for line in lines[:5]:
+        line = line.strip()
+        if '|' not in line:
+            continue
+        q, a = line.split('|', 1)
+        draw.text((10, y), f"? {q}", font=font_small, fill=0)
+        y += 20
+        draw.text((10, y), f"  {a}", font=font_tiny, fill=0)
+        y += 28
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式17: AI 对话 =================
+@mode_register("chat", "AI 对话")
+def mode_chat():
+    """通过 ccgen 生成有趣的 AI 对话"""
+    ccgen("请生成一段有趣的中文 AI 与人的对话，不少于5轮，格式：人：xxx | AI：xxx，一行一轮，直接输出纯文本", "chat.txt")
+
+    lines = read_ccgen("chat.txt")
+    if not lines:
+        lines = ["对话生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 10), "🤖 AI 对话", font=font_title, fill=0, anchor="mt")
+
+    y = 42
+    for line in lines[:10]:
+        line = line.strip()
+        if not line or '：' not in line:
+            continue
+        speaker, content = line.split('：', 1)
+        is_ai = 'AI' in speaker or '机器人' in speaker
+        prefix = "🤖" if is_ai else "👤"
+        font_use = font_small if len(line) > 25 else font_item
+        draw.text((10, y), f"{prefix} {content.strip()}", font=font_use, fill=0)
+        y += 22
+        if y > 285:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式18: 每日美图文案 =================
+@mode_register("art", "每日美图文案")
+def mode_art():
+    """通过 ccgen 生成美图配文"""
+    ccgen("请为一张风景图片生成3段配文（每段不超过15字），描述自然风光或情感意境，直接输出纯文本，一行一段", "art.txt")
+
+    lines = read_ccgen("art.txt")
+    if not lines:
+        lines = ["美图文案生成失败"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 60), "🌄 每日美图", font=font_title, fill=0, anchor="mt")
+
+    y = 110
+    for line in lines[:4]:
+        line = line.strip()
+        if not line:
+            continue
+        draw.text((200, y), line, font=font_item, fill=0, anchor="mt")
+        y += 35
+
+    push_image(img, 3)
+
+# ================= 模式19: 星座运程 =================
+@mode_register("horoscope", "星座运程")
+def mode_horoscope():
+    """通过 ccgen 生成今日星座运程"""
+    signs = ["白羊座", "金牛座", "双子座", "巨蟹座", "狮子座", "处女座",
+             "天秤座", "天蝎座", "射手座", "摩羯座", "水瓶座", "双鱼座"]
+    chosen = random.choice(signs)
+    ccgen(f"请为{chosen}生成今日（{datetime.now().month}月{datetime.now().day}日）运程，包括：整体运势、爱情运势、工作运势，各用一句话描述不超过15字，格式：整体运势：xxx | 爱情运势：xxx | 工作运势：xxx，直接输出纯文本", "horoscope.txt")
+
+    lines = read_ccgen("horoscope.txt")
+    content = lines[0] if lines else "运程生成失败"
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 20), f"♈ {chosen}", font=font_title, fill=0, anchor="mt")
+    draw.text((200, 60), f"{datetime.now().month}/{datetime.now().day} 今日运程", font=font_small, fill=0, anchor="mt")
+
+    parts = content.split('|') if '|' in content else [content]
+    y = 100
+    labels = ["整体运势", "爱情运势", "工作运势"]
+    for i, part in enumerate(parts[:3]):
+        part = part.strip()
+        if not part:
+            continue
+        if '：' in part:
+            _, val = part.split('：', 1)
+        else:
+            val = part
+        label = labels[i] if i < len(labels) else ""
+        draw.text((10, y), f"{label}：", font=font_item, fill=0)
+        draw.text((10, y + 22), val.strip(), font=font_small, fill=0)
+        y += 55
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式20: 天气看板（复用已有） =================
+@mode_register("weather", "天气看板")
+def mode_weather():
+    """渲染天气到 page 3"""
+    data = get_hybrid_weather()
+    t = data["temp_curr"]
+    w = data["weather"]
+    advice = get_clothing_advice(t)
+    solar = get_solar_term(datetime.now().year, datetime.now().month, datetime.now().day)
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 8), f"{data['city']} | 杭州", font=font_small, fill=0)
+    draw.text((300, 8), solar, font=font_small, fill=0)
+    draw.text((200, 32), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
+    draw.text((200, 62), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_small, fill=0, anchor="mt")
+    draw.text((10, 86), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_tiny, fill=0)
+    draw.text((10, 100), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_tiny, fill=0)
+    draw.line([(10, 116), (390, 116)], fill=0)
+    draw.text((10, 120), advice, font=font_tiny, fill=0)
+    draw.line([(10, 138), (390, 138)], fill=0)
+    y = 148
+    for fc in data["forecasts"]:
+        md = fc["date"].replace("-", "/")[5:]
+        draw.text((10, y), md, font=font_tiny, fill=0)
+        draw.text((80, y), fc["weather"], font=font_tiny, fill=0)
+        draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_tiny, fill=0)
+        y += 16
+    draw.text((200, 285), "天气 · 24模式随机", font=font_tiny, fill=0, anchor="mt")
+    push_image(img, 3)
+
+# ================= 模式21: 新闻看板（复用已有） =================
+@mode_register("news", "IT之家新闻")
+def mode_news():
+    """复用 task_news_dashboard 的逻辑"""
+    task_news_dashboard()
+
+# ================= 模式22: 每日一问 =================
+@mode_register("question", "每日一问")
+def mode_question():
+    """通过 ccgen 生成一个有趣的思考问题"""
+    ccgen("请生成1个有趣的人生问题或思考题，不超过30字，直接输出纯文本，不要任何前缀说明", "question.txt")
+
+    lines = read_ccgen("question.txt")
+    question = lines[0] if lines else "今天你想成为什么样的人？"
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 80), "每日一问", font=font_title, fill=0, anchor="mt")
+    draw.text((200, 150), question, font=font_item, fill=0, anchor="mt")
+    draw.text((200, 260), "— 思考使你更强大", font=font_small, fill=0, anchor="mt")
+
+    push_image(img, 3)
+
+# ================= 模式23: 健康提示 =================
+@mode_register("health_tip", "健康提示")
+def mode_health_tip():
+    """通过 ccgen 根据当前季节生成健康提示"""
+    ccgen("请生成6条春季健康生活小贴士，每条不超过18字，涵盖饮食、运动、作息、情绪等方面，一行一条，直接输出纯文本", "health_tip.txt")
+def mode_news():
+    """渲染新闻到 page 3"""
+    news = get_ithome_news()
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 8), "IT之家 热门排行", font=font_small, fill=0)
+    draw.line([(10, 24), (390, 24)], fill=0)
+    y = 32
+    for i, n in enumerate(news[:12], 1):
+        draw.text((10, y), f"{i}. {n['title']}", font=font_tiny, fill=0)
+        y += 21
+        if y > 290:
+            break
+    push_image(img, 3)
+
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 15), "🍀 健康生活", font=font_title, fill=0, anchor="mt")
+
+    y = 50
+    for line in lines[:8]:
+        line = line.strip()
+        if not line:
+            continue
+        font_use = font_small if len(line) > 16 else font_item
+        draw.text((10, y), f"· {line}", font=font_use, fill=0)
+        y += 28
+        if y > 280:
+            break
+
+    push_image(img, 3)
+
+# ================= 模式24: 晚安语（独立模式） =================
+@mode_register("goodnight", "晚安语")
+def mode_goodnight():
+    """生成晚安语，不依赖时间段判断"""
+    ccgen("请生成5条温馨的晚安问候语，每条不超过15字，包含温暖祝福，一行一条，直接输出纯文本", "goodnight.txt")
+
+    lines = read_ccgen("goodnight.txt")
+    if not lines:
+        lines = ["晚安，好梦。"]
+
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+
+    draw.text((200, 30), "🌙 晚安", font=font_huge, fill=0, anchor="mt")
+
+    y = 100
+    for line in lines[:5]:
+        line = line.strip()
+        if not line:
+            continue
+        draw.text((200, y), line, font=font_item, fill=0, anchor="mt")
+        y += 32
+
+    time_str = datetime.now().strftime("%Y年%m月%d日")
+    draw.text((200, 260), time_str, font=font_small, fill=0, anchor="mt")
+
+    push_image(img, 3)
+
+# ================= 天气相关（下层函数） =================
 
 def get_clothing_advice(temp):
     try:
@@ -47,253 +954,59 @@ def get_clothing_advice(temp):
     except:
         return "请根据实际体感气温调整着装。"
 
-# ================= 节气与农历 =================
 def get_solar_term(year, month, day):
-    term_table = {
-        (2024,2,4):"立春", (2024,2,19):"雨水", (2024,3,5):"惊蛰", (2024,3,20):"春分",
-        (2024,4,4):"清明", (2024,4,19):"谷雨", (2024,5,5):"立夏", (2024,5,20):"小满",
-        (2024,6,5):"芒种", (2024,6,21):"夏至", (2024,7,6):"小暑", (2024,7,22):"大暑",
-        (2024,8,7):"立秋", (2024,8,22):"处暑", (2024,9,7):"白露", (2024,9,22):"秋分",
-        (2024,10,8):"寒露", (2024,10,23):"霜降", (2024,11,7):"立冬", (2024,11,22):"小雪",
-        (2024,12,6):"大雪", (2024,12,21):"冬至",
-        (2025,1,5):"小寒", (2025,1,20):"大寒", (2025,2,3):"立春", (2025,2,18):"雨水",
-        (2025,3,5):"惊蛰", (2025,3,20):"春分", (2025,4,4):"清明", (2025,4,20):"谷雨",
-        (2025,5,5):"立夏", (2025,5,21):"小满", (2025,6,5):"芒种", (2025,6,21):"夏至",
-        (2025,7,7):"小暑", (2025,7,22):"大暑", (2025,8,7):"立秋", (2025,8,23):"处暑",
-        (2025,9,7):"白露", (2025,9,22):"秋分", (2025,10,8):"寒露", (2025,10,23):"霜降",
-        (2025,11,7):"立冬", (2025,11,22):"小雪", (2025,12,7):"大雪", (2025,12,21):"冬至",
-        (2026,1,5):"小寒", (2026,1,20):"大寒", (2026,2,4):"立春", (2026,2,18):"雨水",
-        (2026,3,5):"惊蛰", (2026,3,20):"春分", (2026,4,5):"清明", (2026,4,20):"谷雨",
-        (2026,5,5):"立夏", (2026,5,21):"小满", (2026,6,6):"芒种", (2026,6,21):"夏至",
-        (2026,7,7):"小暑", (2026,7,23):"大暑", (2026,8,7):"立秋", (2026,8,23):"处暑",
-        (2026,9,7):"白露", (2026,9,23):"秋分", (2026,10,8):"寒露", (2026,10,23):"霜降",
-        (2026,11,7):"立冬", (2026,11,22):"小雪", (2026,12,7):"大雪", (2026,12,21):"冬至",
-        (2027,1,5):"小寒", (2027,1,20):"大寒", (2027,2,4):"立春", (2027,2,19):"雨水",
-        (2027,3,6):"惊蛰", (2027,3,21):"春分", (2027,4,5):"清明", (2027,4,20):"谷雨",
-    }
-    return term_table.get((year, month, day), None)
+    data = [
+        (1, 6, "小寒"), (1, 20, "大寒"),
+        (2, 4, "立春"), (2, 19, "雨水"),
+        (3, 6, "惊蛰"), (3, 21, "春分"),
+        (4, 5, "清明"), (4, 20, "谷雨"),
+        (5, 6, "立夏"), (5, 21, "小满"),
+        (6, 6, "芒种"), (6, 21, "夏至"),
+        (7, 7, "小暑"), (7, 23, "大暑"),
+        (8, 8, "立秋"), (8, 23, "处暑"),
+        (9, 8, "白露"), (9, 23, "秋分"),
+        (10, 8, "寒露"), (10, 23, "霜降"),
+        (11, 7, "立冬"), (11, 22, "小雪"),
+        (12, 7, "大雪"), (12, 22, "冬至"),
+    ]
+    for m, d, name in data:
+        if m == month and d == day:
+            return name
+    for m, d, name in data:
+        if m == month and d >= day:
+            return name
+    return "立春"
 
 def get_lunar_or_festival(y, m, d):
-    term = get_solar_term(y, m, d)
-    if term:
-        return term
-    solar_fests = {
-        (1,1):"元旦", (2,14):"情人节", (3,8):"妇女节", (4,1):"愚人节",
-        (5,1):"劳动节", (6,1):"儿童节", (7,1):"建党节", (8,1):"建军节",
-        (9,10):"教师节", (10,1):"国庆节", (12,25):"圣诞节"
-    }
-    if (m, d) in solar_fests:
-        return solar_fests[(m, d)]
     try:
-        lunar = ZhDate.from_datetime(datetime(y, m, d))
-        lm, ld = lunar.lunar_month, lunar.lunar_day
-        lunar_fests = {
-            (1,1):"春节", (1,15):"元宵节", (5,5):"端午节",
-            (7,7):"七夕节", (8,15):"中秋节", (9,9):"重阳节", (12,30):"除夕"
+        zh = ZhDate(y, m, d)
+        lunar = zh.lunar_date()
+        festivals = {
+            (1, 1): "春节", (1, 15): "元宵节",
+            (5, 5): "端午节", (7, 7): "七夕节",
+            (8, 15): "中秋节", (9, 9): "重阳节",
+            (12, 8): "腊八节",
         }
-        if (lm, ld) in lunar_fests:
-            return lunar_fests[(lm, ld)]
-        days = ["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十",
-                "十一","十二","十三","十四","十五","十六","十七","十八","十九","二十",
-                "廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"]
-        months = ["正月","二月","三月","四月","五月","六月","七月","八月","九月","十月","冬月","腊月"]
-        if ld == 1:
-            return months[lm-1]
-        return days[ld-1]
+        lm, ld = lunar.month, lunar.day
+        return festivals.get((lm, ld), f"农历{lm}月{ld}")
     except:
-        return ""
-
-def push_image(img, page_id):
-    img.save(f"page_{page_id}.png")
-    api_headers = {"X-API-Key": API_KEY}
-    files = {"images": (f"page_{page_id}.png", open(f"page_{page_id}.png", "rb"), "image/png")}
-    data = {"dither": "true", "pageId": str(page_id)}
-    try:
-        res = requests.post(PUSH_URL, headers=api_headers, files=files, data=data)
-        print(f"Page {page_id} 推送成功: {res.status_code}")
-    except Exception as e:
-        print(f"Page {page_id} 推送失败: {e}")
-
-# ================= 历史今日照片 =================
-def task_history_photo():
-    """✨ 历史上的今天 — 年份均衡 + ±10天范围 + EXIF提纯过滤"""
-    print("生成 Page 3: 历史上的今天...")
-
-    today = datetime.now()
-
-    # -------- EXIF 提纯鉴定器 --------
-    def is_real_photo(path):
-        """通过 EXIF Make/Model 鉴定真实照片"""
-        try:
-            img = Image.open(path)
-            exif = img._getexif()
-            if not exif:
-                return False
-            for tag_id, val in exif.items():
-                tag = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag in ('Make', 'Model'):
-                    return True
-            return False
-        except Exception:
-            return False
-
-    def get_shoot_date(path):
-        """从 EXIF 提取拍摄日期"""
-        try:
-            img = Image.open(path)
-            exif = img._getexif()
-            if exif:
-                for tag_id, val in exif.items():
-                    tag = ExifTags.TAGS.get(tag_id, tag_id)
-                    if tag in ('DateTimeOriginal', 'DateTime') and isinstance(val, str) and len(val) >= 10:
-                        return datetime.strptime(val[:10], "%Y:%m:%d")
-        except Exception:
-            pass
         return None
 
-    def get_day_diff(m1, d1, m2, d2):
-        """计算两个日期在一年中的相隔天数（处理跨年）"""
-        try:
-            d1_d = datetime(2004, m1, d1)
-            d2_d = datetime(2004, m2, d2)
-            diff = abs((d1_d - d2_d).days)
-            return min(diff, 366 - diff)
-        except ValueError:
-            return 999
-
-    # -------- 遍历 NAS --------
-    records_by_year = {}
-    all_records = []
-
-    for root, dirs, files in os.walk(NAS_PHOTO_ROOT):
-        if '@eaDir' in dirs:
-            dirs.remove('@eaDir')
-
-        for file in files:
-            if not file.lower().endswith(('.jpg', '.jpeg')):
-                continue
-            full_path = os.path.join(root, file)
-
-            # EXIF 提纯
-            if not is_real_photo(full_path):
-                continue
-
-            # 取拍摄日期
-            shoot_date = get_shoot_date(full_path)
-            if shoot_date is None:
-                continue
-
-            # 排除今年的照片
-            if shoot_date.year == today.year:
-                continue
-
-            rec = {
-                'year': shoot_date.year,
-                'month': shoot_date.month,
-                'day': shoot_date.day,
-                'path': full_path
-            }
-            all_records.append(rec)
-
-            # ±10天范围内
-            diff = get_day_diff(today.month, today.day, shoot_date.month, shoot_date.day)
-            if diff <= 10:
-                yr = shoot_date.year
-                if yr not in records_by_year:
-                    records_by_year[yr] = []
-                records_by_year[yr].append(rec)
-
-    print(f"✨ 得到 {len(all_records)} 张真实照片，其中 {len(records_by_year)} 个年份在±10天范围内")
-
-    # -------- 年份均衡算法（核心亮点）--------
-    chosen_record = None
-    if records_by_year:
-        # 先抽年份，保证每年被抽中的概率均等
-        chosen_year = random.choice(list(records_by_year.keys()))
-        chosen_record = random.choice(records_by_year[chosen_year])
-        print(f"✨ ✨ 历史足迹中: {chosen_year}年 {today.month}月{today.day}日")
-    elif all_records:
-        # fallback 全局随机
-        chosen_record = random.choice(all_records)
-        print(f"✨ ✨ 全局随机取 ({chosen_record['year']}年)")
-    else:
-        print("✨ 今日无历史照片")
-        return
-
-    chosen_path = chosen_record['path']
-    year = chosen_record['year']
-    print(f"✨ 历史今日: {year}年 {today.month}月{today.day}日 → {os.path.basename(chosen_path)}")
-
-    # -------- 图像处理 --------
-    img = Image.open(chosen_path)
-    img = ImageOps.exif_transpose(img)
-
-    SCREEN_W, SCREEN_H = 400, 300
-    img_ratio = img.width / img.height
-    target_ratio = SCREEN_W / SCREEN_H
-
-    if img_ratio > target_ratio:
-        new_height = SCREEN_H
-        new_width = int(new_height * img_ratio)
-    else:
-        new_width = SCREEN_W
-        new_height = int(new_width / img_ratio)
-
-    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-    left = (new_width - SCREEN_W) // 2
-    top = (new_height - SCREEN_H) // 2
-    img = img.crop((left, top, left + SCREEN_W, top + SCREEN_H))
-
-    # -------- 右下角日期水印 --------
-    draw = ImageDraw.Draw(img)
-    date_text = f"{year}年{today.month}月{today.day}日"
-    try:
-        font_date = ImageFont.truetype(FONT_PATH, 14)
-    except:
-        font_date = font_small
-
-    bbox = draw.textbbox((0, 0), date_text, font=font_date)
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    pad_x, pad_y = 6, 4
-    margin_right, margin_bottom = 8, 8
-    rect_x1 = SCREEN_W - tw - pad_x * 2 - margin_right
-    rect_y1 = SCREEN_H - th - pad_y * 2 - margin_bottom
-    rect_x2 = SCREEN_W - margin_right
-    rect_y2 = SCREEN_H - margin_bottom
-    draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=0)
-    draw.text((rect_x1 + pad_x, rect_y1 + pad_y), date_text, font=font_date, fill=255)
-
-    push_image(img, 3)
-
 def get_hybrid_weather():
-    """高德实时(base) + 高德预报(all) + wttr.in 日出日落"""
     result = {
-        "city": "津南区",
-        "weather": "未知",
-        "temp_curr": 0,
-        "temp_low": 0,
-        "temp_high": 0,
-        "wind_info": "无数据",
-        "humidity": "0%",
-        "feel_temp": "N/A",
-        "sunrise": "--:--",
-        "sunset": "--:--",
-        "forecasts": []
+        "city": "余杭区", "weather": "未知", "temp_curr": 0,
+        "temp_low": 0, "temp_high": 0, "wind_info": "无数据",
+        "humidity": "0%", "feel_temp": "N/A",
+        "sunrise": "--:--", "sunset": "--:--", "forecasts": []
     }
-    
     if not AMAP_KEY:
-        print("⚠️ 未设置 AMAP_WEATHER_KEY，无法获取高德数据")
         return result
-
-    # ---------- 1. 高德实时数据 (extensions=base) ----------
     try:
         base_url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={AMAP_KEY}&extensions=base"
-        print(f"请求高德实时 API: {base_url}")
         base_resp = requests.get(base_url, timeout=10).json()
         if base_resp.get("status") == "1" and base_resp.get("lives"):
             live = base_resp["lives"][0]
-            result["city"] = live.get("city", "津南区")
+            result["city"] = live.get("city", "余杭区")
             result["weather"] = live.get("weather", "未知")
             result["temp_curr"] = int(live.get("temperature", 0))
             result["humidity"] = live.get("humidity", "0") + "%"
@@ -302,190 +1015,131 @@ def get_hybrid_weather():
             wind_num = re.search(r'\d+', wind_power_raw)
             wind_power = wind_num.group(0) if wind_num else "0"
             result["wind_info"] = f"{wind_power}级 {wind_direction}"
-            # 计算体感温度
             try:
                 wind_speed = int(wind_power)
-                if wind_speed <= 1:
-                    wind_kmh = 2
-                elif wind_speed == 2:
-                    wind_kmh = 8
-                else:
-                    wind_kmh = 15 + (wind_speed - 3) * 7
+                wind_kmh = {0: 0, 1: 2, 2: 8}.get(wind_speed, 15 + (wind_speed - 3) * 7)
                 feel_temp = result["temp_curr"] - (wind_kmh / 15) if wind_kmh > 5 else result["temp_curr"]
-                humidity_val = int(live.get("humidity", 50))
-                if humidity_val > 70:
-                    feel_temp -= 1
                 result["feel_temp"] = f"{round(feel_temp, 1)}°C"
             except:
                 result["feel_temp"] = f"{result['temp_curr']}°C"
-            print("✅ 高德实时数据获取成功")
-        else:
-            print(f"⚠️ 高德实时 API 返回异常: {base_resp.get('status')}")
-    except Exception as e:
-        print(f"❌ 高德实时请求异常: {e}")
-
-    # ---------- 2. 高德预报数据 (extensions=all) ----------
+    except:
+        pass
     try:
         all_url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={ADCODE}&key={AMAP_KEY}&extensions=all"
-        print(f"请求高德预报 API: {all_url}")
         all_resp = requests.get(all_url, timeout=10).json()
         if all_resp.get("status") == "1" and all_resp.get("forecasts"):
             forecast = all_resp["forecasts"][0]
             casts = forecast.get("casts", [])
-            if len(casts) >= 1:
-                today_cast = casts[0]
-                result["temp_low"] = int(today_cast.get("nighttemp", 0))
-                result["temp_high"] = int(today_cast.get("daytemp", 0))
-            # 未来两天预报（索引1=明天，索引2=后天）
+            if casts:
+                result["temp_low"] = int(casts[0].get("nighttemp", 0))
+                result["temp_high"] = int(casts[0].get("daytemp", 0))
             for idx in [1, 2]:
                 if idx < len(casts):
                     day = casts[idx]
-                    # 天气描述使用白天天气
-                    weather_desc = day.get("dayweather", "未知")
                     result["forecasts"].append({
                         "date": day.get("date", "")[5:],
-                        "weather": weather_desc,
+                        "weather": day.get("dayweather", "未知"),
                         "temp_low": int(day.get("nighttemp", 0)),
                         "temp_high": int(day.get("daytemp", 0))
                     })
-            print("✅ 高德预报数据获取成功")
-        else:
-            print(f"⚠️ 高德预报 API 返回异常: {all_resp.get('status')}")
-    except Exception as e:
-        print(f"❌ 高德预报请求异常: {e}")
-
-    # ---------- 3. wttr.in 日出日落 ----------
+    except:
+        pass
     try:
-        wttr_url = "https://wttr.in/Jinnan,Tianjin?format=j1&lang=zh"
-        print(f"请求 wttr.in 天文数据: {wttr_url}")
+        wttr_url = "https://wttr.in/Hangzhou?format=j1&lang=zh"
         wttr_resp = requests.get(wttr_url, timeout=15).json()
         astro = wttr_resp['weather'][0]['astronomy'][0]
         result["sunrise"] = astro['sunrise']
         result["sunset"] = astro['sunset']
-        print("✅ wttr.in 日出日落获取成功")
-    except Exception as e:
-        print(f"❌ wttr.in 请求异常: {e}")
-
+    except:
+        pass
     return result
 
-# ================= 天气看板 =================
 def task_weather_dashboard():
     print("生成 Page 4: 混合天气看板（高德+高德+wttr.in日出日落）...")
-    img = Image.new('1', (400, 300), color=255)
+    data = get_hybrid_weather()
+    w = data["weather"]
+    t = data["temp_curr"]
+    advice = get_clothing_advice(t)
+    solar = get_solar_term(datetime.now().year, datetime.now().month, datetime.now().day)
+    lunar = get_lunar_or_festival(datetime.now().year, datetime.now().month, datetime.now().day)
+    img = new_image()
     draw = ImageDraw.Draw(img)
-
-    weather = get_hybrid_weather()
-    if weather["temp_curr"] == 0 and not weather["forecasts"]:
-        draw.text((20, 50), "天气数据获取失败，请检查API Key或网络", font=font_item, fill=0)
-        push_image(img, 4)
-        return
-
-    city_name = weather["city"]
-    weather_text = weather["weather"]
-    curr_temp = weather["temp_curr"]
-    today_low = weather["temp_low"]
-    today_high = weather["temp_high"]
-    wind_info = weather["wind_info"]
-    humidity = weather["humidity"]
-    feel_temp = weather["feel_temp"]
-    sunrise = weather["sunrise"]
-    sunset = weather["sunset"]
-    forecasts = weather["forecasts"]
-
-    now_beijing = datetime.utcnow() + timedelta(hours=8)
-    update_time = now_beijing.strftime("%H:%M")
-
-    draw.text((20, 10), f"{city_name} | 菜鸟智谷", font=font_title, fill=0)
-    time_text = f"更新: {update_time}"
-    try:
-        bbox = draw.textbbox((0, 0), time_text, font=font_small)
-        time_width = bbox[2] - bbox[0]
-    except:
-        time_width = len(time_text) * 8
-    draw.text((390 - time_width, 12), time_text, font=font_small, fill=0)
-
-    draw.text((25, 40), f"{curr_temp}°C", font=font_48, fill=0)
-    draw.text((25, 100), f"{today_low}°/{today_high}°", font=font_item, fill=0)
-    draw.text((150, 45), f"{weather_text}", font=font_36, fill=0)
-
-    draw.rounded_rectangle([(235, 45), (385, 130)], radius=8, outline=0, fill=0)
-    draw.text((245, 45), f"{wind_info}", font=font_small, fill=255)
-    draw.text((245, 70), f"湿度 {humidity}", font=font_small, fill=255)
-    draw.text((245, 95), f"体感 {feel_temp}", font=font_small, fill=255)
-
-    draw.text((25, 135), f"日出 {sunrise}   日落 {sunset}", font=font_item, fill=0)
-
-    draw.line([(20, 160), (380, 160)], fill=0, width=1)
-    x_positions = [30, 200]
-    for i, day in enumerate(forecasts[:2]):
-        x = x_positions[i]
-        draw.text((x, 175), day["date"], font=font_item, fill=0)
-        draw.text((x, 200), day["weather"], font=font_item, fill=0)
-        draw.text((x, 220), f"{day['temp_low']}°~{day['temp_high']}°", font=font_item, fill=0)
-
-    advice = get_clothing_advice(curr_temp)
-    draw.line([(20, 250), (380, 250)], fill=0, width=1)
-    advice_lines = [advice[i:i+18] for i in range(0, len(advice), 18)]
-    for i, line in enumerate(advice_lines[:2]):
-        draw.text((20, 262 + i*24), f"[衣] {line}", font=font_item, fill=0)
-
+    draw.text((10, 8), f"余杭区 | 杭州", font=font_small, fill=0)
+    draw.text((300, 8), solar, font=font_small, fill=0)
+    draw.text((200, 32), f"{t}°C  {w}", font=font_title, fill=0, anchor="mt")
+    draw.text((200, 62), f"{data['temp_high']}° / {data['temp_low']}°  体感 {data['feel_temp']}", font=font_small, fill=0, anchor="mt")
+    draw.text((10, 86), f"湿度 {data['humidity']}  {data['wind_info']}", font=font_tiny, fill=0)
+    draw.text((10, 100), f"日出 {data['sunrise']} | 日落 {data['sunset']}", font=font_tiny, fill=0)
+    draw.line([(10, 116), (390, 116)], fill=0)
+    draw.text((10, 120), advice, font=font_tiny, fill=0)
+    draw.line([(10, 138), (390, 138)], fill=0)
+    y = 148
+    for fc in data["forecasts"]:
+        md = fc["date"].replace("-", "/")[5:]
+        draw.text((10, y), md, font=font_tiny, fill=0)
+        draw.text((80, y), fc["weather"], font=font_tiny, fill=0)
+        draw.text((170, y), f"{fc['temp_high']}°/{fc['temp_low']}°", font=font_tiny, fill=0)
+        y += 16
+    if lunar:
+        draw.line([(10, 200), (390, 200)], fill=0)
+        draw.text((10, 206), f"农历 {lunar}", font=font_tiny, fill=0)
+    draw.text((200, 285), "天气 · 每小时更新", font=font_tiny, fill=0, anchor="mt")
     push_image(img, 4)
 
-# ================= IT之家 热门新闻 =================
 def get_ithome_news():
-    """抓取 IT之家 热门新闻标题"""
-    result = []
     try:
-        resp = requests.get("https://www.ithome.com/", headers=HEADERS, timeout=10)
-        resp.encoding = 'utf-8'
-        # 匹配热门新闻列表中的标题
-        pattern = re.compile(r'<a[^>]+href="https://www\.ithome\.com/[^"]*"[^>]*>([^<]+)</a>')
-        titles = pattern.findall(resp.text)
-        # 去重并过滤
-        seen = set()
-        for t in titles:
-            t = t.strip()
-            if len(t) > 5 and t not in seen and not t.startswith('http'):
-                seen.add(t)
-                result.append(t)
-                if len(result) >= 10:
-                    break
-        print(f"✅ IT之家新闻获取成功: {len(result)} 条")
-    except Exception as e:
-        print(f"❌ IT之家请求异常: {e}")
-    return result
+        url = "https://api.ithome.com/ajax/news ranking?rankingId=hot"
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        data = resp.json()
+        items = data.get("data", [])[:10]
+        news = []
+        for item in items:
+            title = item.get("title", "")[:30]
+            links = item.get("links", {})
+            url2 = links.get("pc", "") if isinstance(links, dict) else ""
+            news.append({"title": title, "url": url2})
+        return news
+    except:
+        return []
 
-# ================= 新闻看板 =================
 def task_news_dashboard():
-    print("生成 Page 4: IT之家热门新闻...")
-    img = Image.new('1', (400, 300), color=255)
-    draw = ImageDraw.Draw(img)
-
+    print("生成 Page 5: IT之家热门新闻...")
     news = get_ithome_news()
-    if not news:
-        draw.text((20, 50), "新闻数据获取失败，请检查网络", font=font_item, fill=0)
-        push_image(img, 5)
-        return
-
-    draw.text((20, 10), "IT之家 | 热门资讯", font=font_title, fill=0)
-    draw.line([(20, 40), (380, 40)], fill=0, width=2)
-
-    y = 55
-    for i, title in enumerate(news[:8]):
-        # 截断超长标题
-        if len(title) > 22:
-            title = title[:21] + "…"
-        draw.text((25, y), f"{i+1}. {title}", font=font_item, fill=0)
-        y += 30
-
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 8), "IT之家 热门排行", font=font_small, fill=0)
+    draw.line([(10, 24), (390, 24)], fill=0)
+    y = 32
+    for i, n in enumerate(news[:12], 1):
+        draw.text((10, y), f"{i}. {n['title']}", font=font_tiny, fill=0)
+        y += 21
+        if y > 290:
+            break
     push_image(img, 5)
+
+# ================= Page 3 随机转盘 =================
+
+def task_page3_random():
+    """从24个模式中随机选一个执行"""
+    if not MODES:
+        print("错误: 没有注册任何模式")
+        return
+    chosen = random.choice(MODES)
+    mid, name, func = chosen
+    print(f"🎲 抽中 Page 3 模式: {mid} ({name})")
+    try:
+        func()
+    except Exception as e:
+        print(f"模式 {mid} 执行失败: {e}")
+        import traceback
+        traceback.print_exc()
 
 # ================= 主程序 =================
 if __name__ == "__main__":
     if not API_KEY or not MAC_ADDRESS:
         print("错误: 请配置 ZECTRIX_API_KEY 和 ZECTRIX_MAC")
         exit(1)
-    task_history_photo()
+    task_page3_random()
     task_weather_dashboard()
     task_news_dashboard()
     print("所有任务执行完毕！")
