@@ -852,8 +852,19 @@ def mode_weather():
 # ================= 模式21: 新闻看板（复用已有） =================
 @mode_register("news", "IT之家新闻")
 def mode_news():
-    """复用 task_news_dashboard 的逻辑"""
-    task_news_dashboard()
+    """渲染新闻到 page 3"""
+    news = get_ithome_news()
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 8), "IT之家 热门排行", font=font_small, fill=0)
+    draw.line([(10, 24), (390, 24)], fill=0)
+    y = 32
+    for i, n in enumerate(news[:12], 1):
+        draw.text((10, y), f"{i}. {n['title']}", font=font_tiny, fill=0)
+        y += 21
+        if y > 290:
+            break
+    push_image(img, 3)
 
 # ================= 模式22: 每日一问 =================
 @mode_register("question", "每日一问")
