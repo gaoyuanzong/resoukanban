@@ -37,7 +37,7 @@ body {
   color: #fff;
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 16px;
   height: 52px;
   gap: 0;
   position: sticky;
@@ -45,6 +45,7 @@ body {
   z-index: 100;
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
   padding-bottom: env(safe-area-inset-bottom, 0);
+  overflow: hidden;
 }
 .nav-brand {
   font-size: 1rem;
@@ -58,7 +59,7 @@ body {
   gap: 8px;
 }
 .nav-brand span { font-weight: 400; opacity: .6; font-size: .85rem; }
-.nav-tabs { display: flex; height: 100%; }
+.nav-tabs { display: flex; height: 100%; min-width: 0; overflow: hidden; }
 .nav-tab {
   padding: 0 20px;
   height: 100%;
@@ -265,17 +266,18 @@ input, select, textarea {
 
 /* 响应式 */
 @media (max-width: 640px) {
-  .nav { padding: 0 12px; padding-bottom: env(safe-area-inset-bottom, 0); }
-  .nav-brand { font-size: .9rem; margin-right: 12px; }
-  .nav-right { display: none; }
-  .nav-tabs { gap: 0; }
-  .nav-tab { padding: 0 8px !important; font-size: .7rem !important; min-height: 44px; display: flex; align-items: center; }
-  .container { padding: 12px 10px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0)); }
+  .nav { overflow: hidden; flex-wrap: nowrap; }
+  .nav-brand { font-size: .82rem !important; white-space: nowrap; margin-right: 4px !important; flex-shrink: 0; }
+  .nav-brand span { display: none; }
+  .nav-tabs { flex-shrink: 0; }
+  .nav-tab { padding: 0 6px !important; font-size: .68rem !important; min-height: 44px; flex-shrink: 0; letter-spacing: -.01em; }
+  .container { padding: 10px 8px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0)); }
   .stat-card { min-height: 44px; }
   button, .btn { min-height: 44px; min-width: 44px; }
   .inp { min-height: 44px; font-size: 16px; }
-  .pi, .ch { min-height: 36px; padding: 4px 10px; }
+  .pi, .ch { min-height: 36px; padding: 4px 8px; }
   .config-section { padding: 10px 0; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important; }
 }
 </style>
 {% block extra_head %}{% endblock %}
