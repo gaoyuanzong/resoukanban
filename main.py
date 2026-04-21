@@ -680,9 +680,9 @@ def mode_recipe():
     y = 50
     for line in lines[:6]:
         line = line.strip()
-        if not line or '｜' not in line:
+        if not line or ('｜' not in line and '|' not in line):
             continue
-        name, desc = line.split('｜', 1)
+        name, desc = line.replace('｜', '|').split('|', 1)
         draw.text((10, y), f"▪ {name.strip()}", font=font_item, fill=0)
         y += 20
         draw.text((10, y), f"  {desc.strip()}", font=font_small, fill=0)
@@ -696,7 +696,7 @@ def mode_recipe():
 @mode_register("book", "每日书目")
 def mode_book():
     """通过 ccgen 推荐每日书籍"""
-    ccgen("请生成3本推荐书籍，每本包含：书名、作者、一句话推荐理由，用'｜'分隔，格式示例：活着｜余华｜人生的无奈与坚韧。一行一本，直接输出纯文本", "book.txt")
+    ccgen("请生成3本推荐书籍，每本包含：书名、作者、一句话推荐理由，用'|'分隔，格式示例：活着|余华|人生的无奈与坚韧。一行一本，直接输出纯文本", "book.txt")
 
     lines = read_ccgen("book.txt")
     if not lines:
@@ -710,9 +710,9 @@ def mode_book():
     y = 50
     for line in lines[:5]:
         line = line.strip()
-        if not line or '｜' not in line:
+        if not line or ('｜' not in line and '|' not in line):
             continue
-        parts = line.split('｜')
+        parts = line.replace('｜', '|').split('|')
         name = parts[0].strip()
         author = parts[1].strip() if len(parts) > 1 else ""
         reason = parts[2].strip() if len(parts) > 2 else ""
