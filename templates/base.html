@@ -3,7 +3,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>{% block title %}墨水屏看板{% endblock %}</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,6 +44,7 @@ body {
   top: 0;
   z-index: 100;
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 .nav-brand {
   font-size: 1rem;
@@ -264,9 +265,17 @@ input, select, textarea {
 
 /* 响应式 */
 @media (max-width: 640px) {
-  .nav { padding: 0 12px; }
-  .nav-tab { padding: 0 12px; font-size: .78rem; }
-  .container { padding: 16px 12px; }
+  .nav { padding: 0 12px; padding-bottom: env(safe-area-inset-bottom, 0); }
+  .nav-brand { font-size: .9rem; margin-right: 12px; }
+  .nav-right { display: none; }
+  .nav-tabs { gap: 0; }
+  .nav-tab { padding: 0 8px !important; font-size: .7rem !important; min-height: 44px; display: flex; align-items: center; }
+  .container { padding: 12px 10px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0)); }
+  .stat-card { min-height: 44px; }
+  button, .btn { min-height: 44px; min-width: 44px; }
+  .inp { min-height: 44px; font-size: 16px; }
+  .pi, .ch { min-height: 36px; padding: 4px 10px; }
+  .config-section { padding: 10px 0; }
 }
 </style>
 {% block extra_head %}{% endblock %}
