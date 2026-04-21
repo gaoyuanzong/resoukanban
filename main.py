@@ -1082,7 +1082,7 @@ def task_weather_dashboard(cfg=None, history=None, layout="standard"):
     if weather["temp_curr"] == 0 and not weather["forecasts"]:
         draw.text((20, 50), "天气数据获取失败，请检查 API Key", font=font_item, fill=0)
         push_image(img, 4)
-        return
+        return True
 
     if layout == "compact":
         _render_weather_compact(draw, weather)
@@ -1092,6 +1092,7 @@ def task_weather_dashboard(cfg=None, history=None, layout="standard"):
         _render_weather_standard(draw, weather)
 
     push_image(img, 4)
+    return True
 
 
 def _render_weather_standard(draw, weather):
@@ -1375,6 +1376,7 @@ if __name__ == "__main__":
             pass
 
     if cfg.is_page_enabled(4):
-        task_weather_dashboard(cfg, history, layout=cfg.page4_layout)
+        ok = task_weather_dashboard(cfg, history, layout=cfg.page4_layout)
+        history.record(page=4, mode="weather", pushed=ok)
 
     print("所有任务执行完毕！")
