@@ -96,12 +96,20 @@
 <!-- 概览统计卡片 -->
 <div class="stats-grid" id="statsGrid">
   <div class="stat-card">
-    <div class="stat-label">设备总数</div>
-    <div class="stat-value" id="statDevices">—</div>
+    <div class="stat-label">今日推送</div>
+    <div class="stat-value" id="statToday">—</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">总渲染次数</div>
-    <div class="stat-value" id="statRenders">—</div>
+    <div class="stat-label">Page 3 推送</div>
+    <div class="stat-value" id="statPage3">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Page 4 推送</div>
+    <div class="stat-value" id="statPage4">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">设备总数</div>
+    <div class="stat-value" id="statDevices">—</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">缓存命中率</div>
@@ -183,6 +191,9 @@ async function loadStats() {
   document.getElementById('statRenders').textContent = d.renders ?? '—';
   document.getElementById('statCacheRate').textContent = (d.cache_rate ?? 0) + '%';
   document.getElementById('statAvgTime').textContent = (d.avg_time_ms ?? 0) + 'ms';
+  document.getElementById('statToday').textContent = d.today_count ?? '—';
+  document.getElementById('statPage3').textContent = d.page3_count ?? '—';
+  document.getElementById('statPage4').textContent = d.page4_count ?? '—';
 
   // 模式使用频率
   if (d.mode_frequency) renderModeFrequency(d.mode_frequency, d.total_renders || 1);

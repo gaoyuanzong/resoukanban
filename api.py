@@ -337,6 +337,12 @@ def get_stats() -> dict:
     # 设备数（模拟为 1，当前是单设备）
     devices = 1
 
+    # 页面统计
+    today_str = str(datetime.date.today())
+    page3_count = sum(1 for e in entries if e.get('page') == 3)
+    page4_count = sum(1 for e in entries if e.get('page') == 4)
+    today_count = sum(1 for e in entries if e.get('timestamp', '').startswith(today_str))
+
     return {
         "devices": devices,
         "renders": total_renders,
@@ -345,6 +351,9 @@ def get_stats() -> dict:
         "mode_frequency": mode_frequency,
         "daily_renders": daily_renders,
         "total_renders": total_renders,
+        "page3_count": page3_count,
+        "page4_count": page4_count,
+        "today_count": today_count,
     }
 
 
