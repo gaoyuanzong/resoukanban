@@ -7,6 +7,8 @@ from pathlib import Path
 
 DEFAULT_CFG = {
     "enabled_pages": [3, 4],
+    "language": "zh",           # zh / en / mixed
+    "content_tone": "neutral",  # positive / neutral / deep / humor
     "page3": {
         "modes": [
             "history_photo", "countdown", "year_progress", "greeting",
@@ -128,6 +130,14 @@ class Config:
 
     def is_page_enabled(self, page_id: int) -> bool:
         return page_id in self.enabled_pages
+
+    def get_language(self) -> str:
+        """返回语言设置，默认 zh"""
+        return self._cfg.get("language", "zh")
+
+    def get_content_tone(self) -> str:
+        """返回内容调性设置，默认 neutral"""
+        return self._cfg.get("content_tone", "neutral")
 
     def get_mode_info(self, mode_id: str) -> str:
         """返回模式的中文名称"""

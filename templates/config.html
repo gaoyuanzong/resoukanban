@@ -1,0 +1,825 @@
+{# templates/config.html — 配置管理页 #}
+{% extends "base.html" %}
+
+{% block title %}配置管理 · 墨水屏看板{% endblock %}
+
+{% block extra_head %}
+<style>
+.config-hero {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px 28px;
+  margin-bottom: 20px;
+}
+.config-hero h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+.config-hero p { color: var(--text2); font-size: .82rem; margin-bottom: 20px; }
+
+.config-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.config-section-header {
+  padding: 12px 16px;
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  background: #fafafa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.config-section-body { padding: 16px 20px; }
+
+/* 模式 chip 分组 */
+.mode-group { margin-bottom: 14px; }
+.mode-group:last-child { margin-bottom: 0; }
+.mode-group-label { font-size: .68rem; font-weight: 600; color: var(--text2); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 6px; }
+
+/* 缩略图面板 */
+.mode-thumb-wrap {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--bg);
+  display: none;
+}
+.mode-thumb-wrap.visible { display: block; }
+.mode-thumb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.mode-thumb-title { font-size: .78rem; font-weight: 700; }
+.mode-thumb-desc { font-size: .7rem; color: var(--text2); }
+.mode-thumb-img { width: 100%; max-height: 140px; object-fit: contain; border: 1px solid var(--border); border-radius: 6px; background: #fff; display: block; }
+
+/* 时段编辑器 */
+.ts-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; }
+.ts-row .inp { width: 60px; padding: 6px 8px; font-size: .78rem; }
+.ts-modes { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 180px; padding-top: 2px; }
+.ts-modes .ch { padding: 3px 8px; font-size: .72rem; }
+.ts-label { font-size: .75rem; color: var(--text2); display: flex; align-items: center; min-width: 30px; }
+
+/* 策略说明 */
+.strategy-desc { font-size: .72rem; color: var(--text2); margin-top: 6px; min-height: 1.2em; }
+
+/* 天气布局切换 */
+.layout-tabs { display: flex; gap: 4px; margin-top: 8px; }
+.layout-tab {
+  padding: 5px 12px;
+  font-size: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: #fff;
+  color: var(--text2);
+  transition: all .15s;
+}
+.layout-tab:hover { border-color: var(--accent); color: var(--text); }
+.layout-tab.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* 预览区域 */
+.preview-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--bg);
+  margin-top: 16px;
+  display: none;
+}
+.preview-wrap.visible { display: block; }
+.preview-img { max-width: 100%; border: 2px solid var(--border); border-radius: 6px; background: #f5f5f5; display: block; margin: 0 auto; }
+.preview-ctrl { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.preview-meta { font-size: .72rem; color: var(--text2); text-align: center; margin-top: 6px; }
+
+/* 底部操作区 */
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.form-actions .btn { flex: 1; min-width: 120px; }
+
+/* 导入导出 */
+.io-btns { display: flex; gap: 6px; }
+
+/* 刷新状态 */
+.refresh-status { font-size: .75rem; color: var(--text2); margin-top: 8px; }
+.refresh-status.success { color: var(--green); }
+.refresh-status.error { color: var(--red); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 配置页英雄区 -->
+<div class="config-hero">
+  <h2>⚙️ 设备配置</h2>
+  <p>管理墨水屏看板的内容模式、刷新策略和天气布局</p>
+
+  <div class="fg" style="margin-bottom:12px">
+    <label class="lbl">设备 MAC 地址</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="text" class="inp" id="macIn" placeholder="例如: 88:56:A6:7B:C7:0C" style="flex:1;min-width:200px">
+      <button class="btn" onclick="loadConfig()">加载配置</button>
+      <button class="btn btn-secondary" onclick="loadHistory()">历史配置</button>
+      <button class="btn btn-green" onclick="triggerRefresh()">⚡ 立即刷新</button>
+    </div>
+  </div>
+  <div id="refreshStatus" class="refresh-status"></div>
+  <div id="historyList" style="display:none;margin-top:12px"></div>
+</div>
+
+<!-- 配置表单 -->
+<div id="configForm" style="display:none">
+  <!-- 内容模式 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>📋 内容模式（多选）</span>
+      <span id="selectedCount" style="font-size:.68rem;font-weight:400;color:var(--text2)">已选 0 个</span>
+    </div>
+    <div class="config-section-body">
+      <div class="mode-group">
+        <div class="mode-group-label">推荐核心（10）</div>
+        <div class="cg" id="modesCore">
+          <span class="ch" data-m="history_photo" onclick="tc(this)">历史照片</span>
+          <span class="ch" data-m="countdown" onclick="tc(this)">节日倒计时</span>
+          <span class="ch" data-m="year_progress" onclick="tc(this)">年进度</span>
+          <span class="ch" data-m="greeting" onclick="tc(this)">早安语</span>
+          <span class="ch" data-m="poetry" onclick="tc(this)">每日诗词</span>
+          <span class="ch" data-m="jokes" onclick="tc(this)">每日笑话</span>
+          <span class="ch" data-m="cold_knowledge" onclick="tc(this)">冷知识</span>
+          <span class="ch" data-m="thisday" onclick="tc(this)">历史上的今天</span>
+          <span class="ch" data-m="riddle" onclick="tc(this)">脑筋急转弯</span>
+          <span class="ch" data-m="quote" onclick="tc(this)">每日语录</span>
+        </div>
+      </div>
+      <div class="mode-group">
+        <div class="mode-group-label">工具 & 生活（8）</div>
+        <div class="cg" id="modesTools">
+          <span class="ch" data-m="word" onclick="tc(this)">每日单词</span>
+          <span class="ch" data-m="wisdom" onclick="tc(this)">人生感悟</span>
+          <span class="ch" data-m="health" onclick="tc(this)">天气养生</span>
+          <span class="ch" data-m="recipe" onclick="tc(this)">时令菜谱</span>
+          <span class="ch" data-m="book" onclick="tc(this)">每日书目</span>
+          <span class="ch" data-m="qa" onclick="tc(this)">百科问答</span>
+          <span class="ch" data-m="chat" onclick="tc(this)">AI 对话</span>
+          <span class="ch" data-m="art" onclick="tc(this)">每日美图</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" id="modesMoreToggle" onclick="toggleMoreModes()" style="margin:8px 0">展开更多模式</button>
+      <div id="modesMoreWrap" style="display:none">
+        <div class="mode-group">
+          <div class="mode-group-label">更多模式（4）</div>
+          <div class="cg" id="modesMore">
+            <span class="ch" data-m="horoscope" onclick="tc(this)">星座运程</span>
+            <span class="ch" data-m="news" onclick="tc(this)">IT之家新闻</span>
+            <span class="ch" data-m="question" onclick="tc(this)">每日一问</span>
+            <span class="ch" data-m="goodnight" onclick="tc(this)">晚安语</span>
+            <span class="ch" data-m="health_tip" onclick="tc(this)">健康提示</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 缩略图预览 -->
+      <div class="mode-thumb-wrap" id="modeThumbPanel">
+        <div class="mode-thumb-head">
+          <span class="mode-thumb-title" id="modeThumbTitle">选择模式查看缩略图</span>
+          <span class="mode-thumb-desc" id="modeThumbDesc"></span>
+        </div>
+        <img class="mode-thumb-img" id="modeThumbImg" alt="模式缩略图">
+      </div>
+    </div>
+  </div>
+
+  <!-- 刷新策略 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>🔄 刷新策略</span>
+    </div>
+    <div class="config-section-body">
+      <div class="pg" id="strategy">
+        <div class="pi" data-v="random" onclick="selectStrategy(this)">随机轮换</div>
+        <div class="pi" data-v="cycle" onclick="selectStrategy(this)">循环轮换</div>
+        <div class="pi" data-v="time_slot" onclick="selectStrategy(this)">时段绑定</div>
+        <div class="pi" data-v="smart" onclick="selectStrategy(this)">智能模式</div>
+      </div>
+      <div class="strategy-desc" id="strategyDesc"></div>
+
+      <!-- 时段规则编辑器 -->
+      <div id="timeSlotSection" style="display:none;margin-top:14px">
+        <label class="lbl">时段规则</label>
+        <div id="timeSlotRules"></div>
+        <button type="button" onclick="addTimeSlotRule()" style="margin-top:8px;padding:5px 12px;font-size:.78rem;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:#fff">+ 添加时段</button>
+        <div style="font-size:.7rem;color:var(--text2);margin-top:4px">每个时间段绑定特定模式，未覆盖的时段使用随机选择</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 语言 & 调性 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>🎨 语言 & 调性</span>
+    </div>
+    <div class="config-section-body">
+      <div class="fg">
+        <label class="lbl">语言偏好</label>
+        <div class="pg" id="language">
+          <div class="pi sel" data-v="zh" onclick="selectPill(this,'language')">中文为主</div>
+          <div class="pi" data-v="en" onclick="selectPill(this,'language')">英文为主</div>
+          <div class="pi" data-v="mixed" onclick="selectPill(this,'language')">中英混合</div>
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="lbl">内容调性</label>
+        <div class="pg" id="tone">
+          <div class="pi sel" data-v="positive" onclick="selectPill(this,'tone')">积极鼓励</div>
+          <div class="pi" data-v="neutral" onclick="selectPill(this,'tone')">中性克制</div>
+          <div class="pi" data-v="deep" onclick="selectPill(this,'tone')">深沉内省</div>
+          <div class="pi" data-v="humor" onclick="selectPill(this,'tone')">轻松幽默</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 地理位置 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>📍 地理位置</span>
+    </div>
+    <div class="config-section-body">
+      <div class="fg" style="margin-bottom:0">
+        <label class="lbl">城市名称</label>
+        <input type="text" class="inp" id="city" placeholder="例如：杭州、上海、北京" style="max-width:280px">
+        <div style="font-size:.7rem;color:var(--text2);margin-top:4px">用于天气信息获取，支持中文城市名</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 天气布局 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>🌤️ 天气布局（Page 4）</span>
+    </div>
+    <div class="config-section-body">
+      <label class="lbl">选择布局样式</label>
+      <div class="pg" id="weatherLayout">
+        <div class="pi sel" data-v="standard" onclick="selectPill(this,'weatherLayout')">标准</div>
+        <div class="pi" data-v="compact" onclick="selectPill(this,'weatherLayout')">紧凑</div>
+        <div class="pi" data-v="full" onclick="selectPill(this,'weatherLayout')">全屏大字</div>
+      </div>
+      <div style="font-size:.7rem;color:var(--text2);margin-top:6px">选中布局后点击"预览效果"可查看不同天气布局效果</div>
+    </div>
+  </div>
+
+  <!-- AI 模型配置 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>🤖 AI 模型配置</span>
+    </div>
+    <div class="config-section-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg">
+          <label class="lbl">AI 提供商</label>
+          <select class="sel" id="llmProvider" onchange="updateModelList()">
+            <option value="anthropic">Claude (Anthropic)</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="aliyun">阿里百炼</option>
+            <option value="moonshot">月之暗面</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">AI 模型</label>
+          <select class="sel" id="llmModel">
+            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刷新间隔 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>⏱️ 刷新间隔</span>
+    </div>
+    <div class="config-section-body">
+      <div class="fg" style="margin-bottom:0">
+        <label class="lbl">自动刷新间隔（分钟）</label>
+        <input type="number" class="inp" id="refreshInterval" min="10" max="1440" placeholder="60" style="max-width:180px">
+        <div style="font-size:.7rem;color:var(--text2);margin-top:4px">设置自动推送的间隔时间，最小 10 分钟</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 推送操作 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>📤 推送操作</span>
+    </div>
+    <div class="config-section-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn" onclick="saveConfig()">💾 保存配置</button>
+        <button class="btn btn-outline" onclick="openPreviewModal()">👁️ 预览效果</button>
+        <button class="btn btn-green" onclick="doPushPage3()">▶ 推送 Page 3</button>
+        <button class="btn btn-green" onclick="doPushPage4()">▶ 推送 Page 4</button>
+      </div>
+      <div id="pushResult" style="font-size:.78rem;display:none"></div>
+    </div>
+  </div>
+
+  <!-- 导入/导出 -->
+  <div class="config-section">
+    <div class="config-section-header">
+      <span>💾 配置备份</span>
+    </div>
+    <div class="config-section-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="exportConfig()">导出 JSON</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('importFile').click()">导入 JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importConfig(event)">
+      </div>
+    </div>
+  </div>
+
+  <!-- 实时预览 -->
+  <div class="preview-wrap" id="previewWrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <label class="lbl" style="margin:0">实时预览</label>
+      <div class="cg" id="inlinePreviewModes" style="gap:4px"></div>
+    </div>
+    <div style="text-align:center">
+      <img id="inlinePreviewImg" class="preview-img" alt="Preview">
+      <div class="preview-meta" id="inlinePreviewMeta"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 预览 Modal -->
+<div id="previewModal" class="modal-overlay" onclick="if(event.target===this)closePreviewModal()">
+<div class="modal-content" style="max-width:560px">
+<button class="modal-close" onclick="closePreviewModal()">×</button>
+<h3>效果预览</h3>
+<div id="previewModeSelect" style="margin-bottom:12px"></div>
+<div style="text-align:center">
+  <img id="previewImg" style="max-width:100%;border:2px solid var(--border);border-radius:6px;background:#f5f5f5" alt="Preview">
+  <div id="previewStatus" style="font-size:.75rem;color:var(--text2);margin-top:8px"></div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+// ── 模式数据 ─────────────────────────────────────────────────
+const ALL_MODE_IDS = [
+  'history_photo','countdown','year_progress','greeting','poetry','jokes',
+  'cold_knowledge','thisday','riddle','quote','word','wisdom','health','recipe',
+  'book','qa','chat','art','horoscope','news','question','goodnight','health_tip'
+];
+
+const MODE_META = {
+  history_photo: { name: '历史照片', tip: '历史上的今天同日期拍摄的照片' },
+  countdown: { name: '节日倒计时', tip: '重要节日的倒计时天数' },
+  year_progress: { name: '年进度', tip: '年度目标完成进度条' },
+  greeting: { name: '早安语', tip: '早安或晚安的问候语' },
+  poetry: { name: '每日诗词', tip: '精选古诗词与简短注解' },
+  jokes: { name: '每日笑话', tip: '轻松幽默的笑话段子' },
+  cold_knowledge: { name: '冷知识', tip: '有趣的生活冷知识' },
+  thisday: { name: '历史上的今天', tip: '今天发生的历史大事件' },
+  riddle: { name: '脑筋急转弯', tip: '有趣的脑筋急转弯题目' },
+  quote: { name: '每日语录', tip: '名人名言与经典语录' },
+  word: { name: '每日单词', tip: '英语单词与中文释义' },
+  wisdom: { name: '人生感悟', tip: '富含哲理的人生感悟' },
+  health: { name: '天气养生', tip: '顺应节气的健康养生建议' },
+  recipe: { name: '时令菜谱', tip: '当季食材的美味菜谱' },
+  book: { name: '每日书目', tip: '每日推荐阅读书籍' },
+  qa: { name: '百科问答', tip: '有趣的百科知识问答' },
+  chat: { name: 'AI 对话', tip: '与 AI 的有趣对话' },
+  art: { name: '每日美图', tip: '每日美图文案分享' },
+  horoscope: { name: '星座运程', tip: '星座今日运势' },
+  news: { name: 'IT之家新闻', tip: '科技 IT 新闻热榜' },
+  question: { name: '每日一问', tip: '每天一个值得思考的问题' },
+  goodnight: { name: '晚安语', tip: '温馨的晚安问候语' },
+  health_tip: { name: '健康提示', tip: '每日健康小贴士' },
+};
+
+const strategyDescs = {
+  random: '从已选中的模式中随机抽取一个展示',
+  cycle: '按顺序循环切换所有选中的模式',
+  time_slot: '根据时间段显示不同内容模式（需配置时段规则）',
+  smart: '根据时间段自动匹配最佳模式（早晨/工作/休闲等）'
+};
+
+const llmModels = {
+  anthropic: [
+    { v: 'claude-sonnet-4-6', n: 'Claude Sonnet 4.6' },
+    { v: 'claude-opus-4-6', n: 'Claude Opus 4.6' },
+  ],
+  deepseek: [
+    { v: 'deepseek-chat', n: 'DeepSeek Chat' },
+    { v: 'deepseek-coder', n: 'DeepSeek Coder' },
+  ],
+  aliyun: [
+    { v: 'qwen-max', n: '通义千问 Max' },
+    { v: 'qwen-plus', n: '通义千问 Plus' },
+  ],
+  moonshot: [
+    { v: 'moonshot-v1-8k', n: 'Kimi K1.5' },
+    { v: 'moonshot-v1-32k', n: 'Kimi 32K' },
+  ],
+};
+
+let currentLayout = 'standard';
+let currentSelectedModes = [];
+
+// ── 初始化 ──────────────────────────────────────────────────
+function updateModelList() {
+  const provider = document.getElementById('llmProvider').value;
+  const sel = document.getElementById('llmModel');
+  sel.innerHTML = '';
+  (llmModels[provider] || []).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.v;
+    opt.textContent = m.n;
+    sel.appendChild(opt);
+  });
+}
+
+function updateSelectedCount() {
+  const count = document.querySelectorAll('#configForm .cg .ch.sel').length;
+  document.getElementById('selectedCount').textContent = `已选 ${count} 个`;
+}
+
+function toggleMoreModes(forceOpen) {
+  const wrap = document.getElementById('modesMoreWrap');
+  const btn = document.getElementById('modesMoreToggle');
+  const open = typeof forceOpen === 'boolean' ? forceOpen : wrap.style.display === 'none';
+  wrap.style.display = open ? '' : 'none';
+  btn.textContent = open ? '收起更多模式' : '展开更多模式';
+}
+
+// ── Chip 切换 ──────────────────────────────────────────────
+function tc(el) {
+  el.classList.toggle('sel');
+  const modeId = el.dataset.m;
+  if (modeId) {
+    const thumbPanel = document.getElementById('modeThumbPanel');
+    thumbPanel.classList.add('visible');
+    document.getElementById('modeThumbTitle').textContent = MODE_META[modeId]
+      ? `${modeId} · ${MODE_META[modeId].name}`
+      : modeId;
+    document.getElementById('modeThumbDesc').textContent = MODE_META[modeId]?.tip || '';
+    document.getElementById('modeThumbImg').src = `${API_BASE}/api/preview?mode=${modeId}&page=3&layout=standard&t=${Date.now()}`;
+
+    // 如果选中了更多模式区域的 chip，自动展开
+    const moreWrap = document.getElementById('modesMoreWrap');
+    if (!moreWrap.style.display && el.closest('#modesMore')) {
+      toggleMoreModes(true);
+    }
+  }
+  updateSelectedCount();
+}
+
+// ── 策略选择 ───────────────────────────────────────────────
+function selectStrategy(el) {
+  selectPill(el, 'strategy');
+  const v = el.dataset.v;
+  document.getElementById('strategyDesc').textContent = strategyDescs[v] || '';
+  document.getElementById('timeSlotSection').style.display = v === 'time_slot' ? '' : 'none';
+}
+
+// ── 时段规则编辑器 ─────────────────────────────────────────
+function addTimeSlotRule(startHour = 9, endHour = 12, modes = []) {
+  const container = document.getElementById('timeSlotRules');
+  if (container.children.length >= 12) {
+    showToast('最多添加 12 个时段', 'error');
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'ts-row';
+  const modesHtml = ALL_MODE_IDS.map(m => {
+    const sel = modes.includes(m) ? ' sel' : '';
+    const tip = (MODE_META[m]?.tip || '').replace(/"/g, '&quot;');
+    return `<span class="ch${sel}" data-m="${m}" data-tip="${tip}" onclick="tc(this)">${MODE_META[m]?.name || m}</span>`;
+  }).join('');
+  row.innerHTML = `
+    <input type="number" class="inp" min="0" max="23" value="${startHour}" placeholder="起时" style="width:60px">
+    <span class="ts-label">—</span>
+    <input type="number" class="inp" min="0" max="24" value="${endHour}" placeholder="止时" style="width:60px">
+    <span class="ts-label">时</span>
+    <div class="ts-modes">${modesHtml}</div>
+    <button onclick="this.parentElement.remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:#fff;color:var(--red);font-size:.8rem">✕</button>
+  `;
+  container.appendChild(row);
+}
+
+function getTimeSlotRules() {
+  const rules = [];
+  document.querySelectorAll('#timeSlotRules .ts-row').forEach(row => {
+    const inputs = row.querySelectorAll('input[type=number]');
+    const startHour = parseInt(inputs[0]?.value) || 0;
+    const endHour = parseInt(inputs[1]?.value) || 24;
+    const modes = [];
+    row.querySelectorAll('.ts-modes .ch.sel').forEach(el => modes.push(el.dataset.m));
+    if (modes.length > 0) rules.push({ startHour, endHour, modes });
+  });
+  return rules;
+}
+
+function fillTimeSlotRules(rules) {
+  const container = document.getElementById('timeSlotRules');
+  container.innerHTML = '';
+  (rules || []).forEach(r => addTimeSlotRule(r.startHour || 0, r.endHour || 24, r.modes || []));
+}
+
+// ── 加载配置 ───────────────────────────────────────────────
+async function loadConfig() {
+  const mac = document.getElementById('macIn').value.trim();
+  if (!mac) { showToast('请输入 MAC 地址（或留空使用本地配置）', 'error'); return; }
+  try {
+    const res = await apiFetch(`${API_BASE}/api/config`);
+    if (res.ok && res.data) {
+      fillForm(res.data);
+      document.getElementById('configForm').style.display = 'block';
+      document.getElementById('historyList').style.display = 'none';
+      showToast('配置已加载', 'success');
+    } else {
+      showToast('加载失败', 'error');
+    }
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function fillForm(cfg) {
+  // 模式
+  document.querySelectorAll('#configForm .cg .ch').forEach(el => el.classList.remove('sel'));
+  (cfg.page3_modes || []).forEach(m => {
+    const chip = document.querySelector(`#configForm .cg .ch[data-m="${m}"]`);
+    if (chip) chip.classList.add('sel');
+    // 确保 chip 存在于更多区域（如果不在核心/工具组）
+    else {
+      const moreContainer = document.getElementById('modesMore');
+      if (moreContainer) {
+        const exists = moreContainer.querySelector(`.ch[data-m="${m}"]`);
+        if (!exists) {
+          const el = document.createElement('span');
+          el.className = 'ch';
+          el.dataset.m = m;
+          el.textContent = MODE_META[m]?.name || m;
+          el.onclick = () => tc(el);
+          moreContainer.appendChild(el);
+        }
+      }
+    }
+  });
+  updateSelectedCount();
+
+  // 策略
+  const strat = cfg.refresh_strategy || cfg.page3_force_mode ? 'random' : 'random';
+  document.querySelectorAll('#strategy .pi').forEach(el => {
+    el.classList.remove('sel');
+    if (el.dataset.v === strat) { el.classList.add('sel'); selectStrategy(el); }
+  });
+
+  // 语言
+  selectPill(document.querySelector('#language .pi[data-v="zh"]') || document.querySelector('#language .pi'), 'language');
+  if (cfg.language) {
+    const langEl = document.querySelector(`#language .pi[data-v="${cfg.language}"]`);
+    if (langEl) selectPill(langEl, 'language');
+  }
+
+  // 调性
+  if (cfg.content_tone) {
+    const toneEl = document.querySelector(`#tone .pi[data-v="${cfg.content_tone}"]`);
+    if (toneEl) selectPill(toneEl, 'tone');
+  }
+
+  // 城市
+  document.getElementById('city').value = cfg.city || '';
+  // 天气布局
+  const wl = cfg.page4_layout || 'standard';
+  const wlEl = document.querySelector(`#weatherLayout .pi[data-v="${wl}"]`);
+  if (wlEl) selectPill(wlEl, 'weatherLayout');
+  currentLayout = wl;
+  // 刷新间隔
+  document.getElementById('refreshInterval').value = cfg.refresh_interval || 60;
+  // 时段规则
+  fillTimeSlotRules(cfg.time_slot_rules || []);
+}
+
+// ── 收集表单数据 ───────────────────────────────────────────
+function collectFormData() {
+  const modes = [];
+  document.querySelectorAll('#configForm .cg .ch.sel').forEach(el => {
+    if (el.dataset.m) modes.push(el.dataset.m);
+  });
+  return {
+    page3_modes: modes,
+    page3_force_mode: null,
+    page3_layout: 'default',
+    page4_layout: currentLayout,
+    language: document.querySelector('#language .pi.sel')?.dataset.v || 'zh',
+    content_tone: document.querySelector('#tone .pi.sel')?.dataset.v || 'positive',
+    city: document.getElementById('city').value.trim() || '杭州',
+    llm_provider: document.getElementById('llmProvider').value,
+    llm_model: document.getElementById('llmModel').value,
+    refresh_interval: parseInt(document.getElementById('refreshInterval').value) || 60,
+    refresh_strategy: document.querySelector('#strategy .pi.sel')?.dataset.v || 'random',
+    time_slot_rules: getTimeSlotRules(),
+  };
+}
+
+// ── 保存配置 ───────────────────────────────────────────────
+async function saveConfig() {
+  const data = collectFormData();
+  const res = await apiFetch(`${API_BASE}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (res.ok) {
+    showToast('配置已保存到 config.yaml', 'success');
+  } else {
+    showToast('保存失败: ' + (res.data?.error || '未知错误'), 'error');
+  }
+}
+
+// ── 立即刷新 ───────────────────────────────────────────────
+async function triggerRefresh() {
+  const statusEl = document.getElementById('refreshStatus');
+  statusEl.textContent = '正在触发刷新...';
+  statusEl.className = 'refresh-status';
+  const res = await apiFetch(`${API_BASE}/api/refresh`, { method: 'POST' });
+  if (res.ok) {
+    statusEl.textContent = '✅ 刷新指令已发送，设备将尽快更新';
+    statusEl.className = 'refresh-status success';
+    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'refresh-status'; }, 4000);
+  } else {
+    statusEl.textContent = '❌ 刷新失败: ' + (res.error || '未知错误');
+    statusEl.className = 'refresh-status error';
+  }
+}
+
+// ── 推送 ───────────────────────────────────────────────────
+async function doPushPage3() {
+  const modes = [];
+  document.querySelectorAll('#configForm .cg .ch.sel').forEach(el => {
+    if (el.dataset.m) modes.push(el.dataset.m);
+  });
+  if (modes.length === 0) { showToast('请先选择至少一个模式', 'error'); return; }
+  const mode = modes[Math.floor(Math.random() * modes.length)];
+  const res = await apiFetch(`/api/push?mode=${encodeURIComponent(mode)}&page=3&layout=${currentLayout}`);
+  const el = document.getElementById('pushResult');
+  el.style.display = 'block';
+  if (res.ok) {
+    el.textContent = '✅ Page 3 推送成功！';
+    el.style.color = 'var(--green)';
+    showToast('Page 3 推送成功', 'success');
+  } else {
+    el.textContent = '❌ Page 3 推送失败: ' + (res.error || '未知错误');
+    el.style.color = 'var(--red)';
+    showToast('Page 3 推送失败', 'error');
+  }
+}
+
+async function doPushPage4() {
+  const res = await apiFetch(`/api/push?mode=weather&page=4&layout=${currentLayout}`);
+  const el = document.getElementById('pushResult');
+  el.style.display = 'block';
+  if (res.ok) {
+    el.textContent = '✅ Page 4 推送成功！';
+    el.style.color = 'var(--green)';
+    showToast('Page 4 推送成功', 'success');
+  } else {
+    el.textContent = '❌ Page 4 推送失败: ' + (res.error || '未知错误');
+    el.style.color = 'var(--red)';
+    showToast('Page 4 推送失败', 'error');
+  }
+}
+
+// ── 预览 Modal ─────────────────────────────────────────────
+function openPreviewModal() {
+  const modes = [];
+  document.querySelectorAll('#configForm .cg .ch.sel').forEach(el => {
+    if (el.dataset.m) modes.push(el.dataset.m);
+  });
+  if (modes.length === 0) { showToast('请先选择至少一个模式', 'error'); return; }
+
+  const selectDiv = document.getElementById('previewModeSelect');
+  selectDiv.innerHTML = '<div class="cg" style="gap:4px">' + modes.map((m, i) => {
+    const label = MODE_META[m]?.name || m;
+    return `<span class="ch${i === 0 ? ' sel' : ''}" onclick="previewModeInModal('${m}', this)" style="cursor:pointer">${label}</span>`;
+  }).join('') + '</div>';
+
+  document.getElementById('previewImg').src = '';
+  document.getElementById('previewStatus').textContent = '选择一个模式开始预览';
+  document.getElementById('previewModal').classList.add('active');
+  // 默认预览第一个
+  if (modes.length > 0) {
+    previewModeInModal(modes[0], selectDiv.querySelector('.ch'));
+  }
+}
+
+function closePreviewModal() {
+  document.getElementById('previewModal').classList.remove('active');
+}
+
+async function previewModeInModal(mode, el) {
+  if (el) {
+    el.closest('.cg').querySelectorAll('.ch').forEach(c => c.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+  const img = document.getElementById('previewImg');
+  const status = document.getElementById('previewStatus');
+  status.textContent = '渲染中...';
+  img.style.display = 'none';
+  try {
+    const start = Date.now();
+    const res = await apiFetch(`/api/preview?mode=${mode}&page=3&layout=${currentLayout}&t=${Date.now()}`);
+    const elapsed = Date.now() - start;
+    if (res.ok && res.blob) {
+      img.src = URL.createObjectURL(res.blob);
+      img.style.display = 'block';
+      status.textContent = `${MODE_META[mode]?.name || mode} · ${elapsed}ms · ${(res.blob.size / 1024).toFixed(1)}KB`;
+    } else {
+      status.textContent = '渲染失败: ' + (res.data?.error || res.error);
+    }
+  } catch (e) {
+    status.textContent = '渲染失败: ' + e.message;
+  }
+}
+
+// ── 导入/导出 ──────────────────────────────────────────────
+function exportConfig() {
+  const data = collectFormData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `resoukanban-config-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('配置已导出', 'success');
+}
+
+function importConfig(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      fillForm(data);
+      document.getElementById('configForm').style.display = 'block';
+      showToast('配置已导入，请检查后点击保存', 'success');
+    } catch (err) {
+      showToast('JSON 格式无效: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ── 历史配置加载 ───────────────────────────────────────────
+async function loadHistory() {
+  const res = await apiFetch(`${API_BASE}/api/history`);
+  const container = document.getElementById('historyList');
+  if (!res.ok || !res.data || res.data.length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:.82rem">暂无推送历史记录</div>';
+    container.style.display = 'block';
+    document.getElementById('configForm').style.display = 'none';
+    return;
+  }
+  container.innerHTML = '<div style="font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">最近推送记录</div>' +
+    res.data.slice(-20).reverse().map(e => {
+      const ts = e.timestamp ? e.timestamp.substring(5, 16) : '';
+      const okCls = e.pushed ? 'badge-success' : 'badge-error';
+      const okTxt = e.pushed ? '成功' : '失败';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem">
+        <span style="color:var(--text2);font-size:.75rem">${ts}</span>
+        <span style="font-weight:600">${e.mode || '-'}</span>
+        <span class="badge ${okCls}">${okTxt}</span>
+      </div>`;
+    }).join('');
+  container.style.display = 'block';
+  document.getElementById('configForm').style.display = 'none';
+}
+
+// ── 初始化 ──────────────────────────────────────────────────
+updateModelList();
+// 加载已有配置
+apiFetch(`${API_BASE}/api/config`).then(res => {
+  if (res.ok && res.data && Object.keys(res.data).length > 0) {
+    fillForm(res.data);
+    document.getElementById('configForm').style.display = 'block';
+  }
+});
+</script>
+{% endblock %}

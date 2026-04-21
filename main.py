@@ -53,14 +53,53 @@ os.makedirs(CCGEN_DIR, exist_ok=True)
 
 # ================= 工具函数 =================
 
+LANGUAGE_MAP = {
+    "zh": "请使用中文输出",
+    "en": "Please output in English",
+    "mixed": "请同时输出中文和英文两个版本",
+}
+
+TONE_MAP = {
+    "positive": "积极鼓励、温暖向上",
+    "neutral": "中性克制、理性平和",
+    "deep": "深沉内省、富有哲理",
+    "humor": "轻松幽默、诙谐有趣",
+}
+
 def ccgen(prompt, filename):
     """调用 Claude Code 生成文本内容到文件"""
+    # 读取语言和调性设置
+    try:
+        cfg = Config()
+        lang = cfg.get_language()
+        tone = cfg.get_content_tone()
+    except Exception:
+        lang = "zh"
+        tone = "neutral"
+
+    lang_hint = LANGUAGE_MAP.get(lang, "请使用中文输出")
+    tone_hint = TONE_MAP.get(tone, "中性克制、理性平和")
+
+    # mixed 模式特殊处理：同时输出两种语言
+    if lang == "mixed":
+        lang_suffix = (
+            f"{lang_hint}。"
+            f"内容调性：{tone_hint}。"
+            "直接输出纯文本，不要markdown代码块，不要任何前缀说明，直接把内容写入文件："
+        )
+    else:
+        lang_suffix = (
+            f"{lang_hint}。"
+            f"内容调性：{tone_hint}。"
+            "直接输出纯文本，不要markdown代码块，不要任何前缀说明，直接把内容写入文件："
+        )
+
     output = os.path.join(CCGEN_DIR, filename)
     workdir = "/tmp/cc-gen-work"
     os.makedirs(workdir, exist_ok=True)
     cmd = [
         "/home/gaoyuan/nodejs/bin/claude", "--permission-mode", "bypassPermissions", "--print",
-        f"{prompt}。直接输出纯文本，不要markdown代码块，不要任何前缀说明，直接把内容写入文件：{output}"
+        f"{prompt}。{lang_suffix}{output}"
     ]
     try:
         result = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=60)

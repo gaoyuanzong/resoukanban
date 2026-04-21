@@ -1,0 +1,581 @@
+{# templates/preview.html — 预览控制台 #}
+{% extends "base.html" %}
+
+{% block title %}预览控制台 · 墨水屏看板{% endblock %}
+
+{% block extra_head %}
+<style>
+.hero-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.hero-card h2 { font-size: 1.1rem; font-weight: 700; }
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .72rem;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 16px;
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  color: var(--green);
+}
+.health-dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* 两栏布局 */
+.main-layout { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+@media (max-width: 720px) { .main-layout { grid-template-columns: 1fr; } }
+
+/* 预览区 */
+.preview-area { text-align: center; }
+.screen-frame {
+  display: inline-block;
+  background: #fff;
+  border: 2px solid #d4d4d4;
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: inset 0 0 0 1px #e5e5e5, 0 4px 12px rgba(0,0,0,.08);
+  position: relative;
+  transition: all .3s;
+}
+.screen-frame img {
+  display: block;
+  background: #fff;
+}
+.screen-label { margin-top: 10px; font-size: .7rem; color: var(--text2); letter-spacing: .03em; }
+
+/* 加载动画 */
+.loading-overlay {
+  position: absolute;
+  inset: 8px;
+  background: rgba(255,255,255,.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+.loading-overlay.active { opacity: 1; pointer-events: auto; }
+
+/* 墨水屏闪动效果 */
+@keyframes eink-flash {
+  0% { filter: invert(0); }
+  15% { filter: invert(1); }
+  30% { filter: invert(0); }
+  45% { filter: invert(.6); }
+  60% { filter: invert(0); }
+  100% { filter: invert(0); }
+}
+.screen-frame.flash img { animation: eink-flash .5s ease; }
+
+/* 模式选择按钮 */
+.persona-section { margin-bottom: 10px; }
+.persona-section:last-of-type { margin-bottom: 0; }
+.persona-section-title { font-size: .65rem; color: var(--text2); letter-spacing: .03em; margin-bottom: 5px; }
+.persona-fold-toggle {
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: .7rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text2);
+  cursor: pointer;
+  width: 100%;
+}
+.persona-fold-toggle:hover { border-color: var(--accent); color: var(--text); }
+.persona-btn {
+  padding: 7px 4px;
+  font-size: .75rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  transition: all .15s;
+  color: var(--text);
+  text-align: center;
+  width: 100%;
+}
+.persona-btn:hover { border-color: #a3a3a3; background: var(--bg); }
+.persona-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+.persona-btn .lbl { display: block; font-size: .6rem; font-weight: 400; opacity: .65; margin-top: 1px; }
+.persona-btn.active .lbl { opacity: .85; }
+
+/* 电压滑块 */
+.range-row { display: flex; align-items: center; gap: 10px; }
+input[type="range"] {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.range-value { font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
+.range-labels { display: flex; justify-content: space-between; font-size: .62rem; color: #a3a3a3; margin-top: 3px; }
+
+/* 布局调节 */
+.layout-grid { display: flex; gap: 4px; flex-wrap: wrap; }
+.layout-btn {
+  padding: 4px 10px;
+  font-size: .68rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  color: var(--text2);
+  transition: all .15s;
+}
+.layout-btn:hover { border-color: #a3a3a3; }
+.layout-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+/* 响应信息网格 */
+.info-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: .75rem; }
+.info-label { color: var(--text2); font-weight: 500; }
+.info-value { font-variant-numeric: tabular-nums; }
+.info-value.error { color: var(--red); }
+
+/* 渲染历史 */
+.history-list { max-height: 280px; overflow-y: auto; }
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+  font-size: .8rem;
+}
+.history-item:hover { background: var(--bg); }
+.history-item:last-child { border-bottom: none; }
+.history-thumb {
+  width: 56px; height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.history-info .h-mode { font-size: .75rem; font-weight: 600; }
+.history-info .h-meta { font-size: .62rem; color: var(--text2); }
+
+/* 生成按钮 */
+.btn-generate {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-size: .85rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s;
+  margin-top: 14px;
+}
+.btn-generate:hover { background: var(--accent-hover); }
+.btn-generate:active { transform: scale(.98); }
+.btn-generate:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 预设按钮 */
+.preset-row { display: flex; gap: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 顶部状态栏 -->
+<div class="hero-card">
+  <h2>👁️ 预览控制台</h2>
+  <span class="health-badge" id="healthBadge">
+    <span class="health-dot"></span>
+    <span id="healthText">系统正常</span>
+  </span>
+</div>
+
+<!-- 主布局 -->
+<div class="main-layout">
+  <!-- 左侧：预览区 -->
+  <div>
+    <!-- 墨水屏模拟框 -->
+    <div class="card">
+      <div class="card-header">渲染输出</div>
+      <div class="card-body preview-area">
+        <div class="screen-frame" id="screenFrame">
+          <img id="previewImg" src="" alt="Preview" style="width:400px;height:300px;background:#f5f5f5">
+          <div class="loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <div style="font-size:.75rem;color:var(--text2)">正在生成...</div>
+          </div>
+        </div>
+        <div class="screen-label" id="screenLabel">400 × 300 · 1-bit 单色</div>
+      </div>
+    </div>
+
+    <!-- 响应信息 -->
+    <div class="card" style="margin-top:12px">
+      <div class="card-header">响应信息</div>
+      <div class="card-body">
+        <div class="info-grid" id="infoGrid">
+          <span class="info-label">状态</span>
+          <span class="info-value" id="infoStatus">—</span>
+          <span class="info-label">模式</span>
+          <span class="info-value" id="infoPersona">—</span>
+          <span class="info-label">渲染时间</span>
+          <span class="info-value" id="infoTime">—</span>
+          <span class="info-label">图片大小</span>
+          <span class="info-value" id="infoSize">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 渲染历史 -->
+    <div class="card" style="margin-top:12px">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>渲染历史</span>
+        <button onclick="clearHistory()" style="border:none;background:none;font-size:.68rem;color:var(--text2);cursor:pointer;padding:0">清空</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="history-list" id="historyList">
+          <div style="padding:16px;text-align:center;font-size:.75rem;color:var(--text2)">暂无历史记录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：控制面板 -->
+  <div>
+    <!-- 模式选择 -->
+    <div class="card">
+      <div class="card-header">模式选择</div>
+      <div class="card-body">
+        <div class="persona-section">
+          <div class="persona-section-title">推荐核心（10）</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+            <button class="persona-btn active" data-m="history_photo" onclick="selectMode(this)">历史照片<div class="lbl">history</div></button>
+            <button class="persona-btn" data-m="countdown" onclick="selectMode(this)">节日倒计时<div class="lbl">countdown</div></button>
+            <button class="persona-btn" data-m="year_progress" onclick="selectMode(this)">年进度<div class="lbl">progress</div></button>
+            <button class="persona-btn" data-m="greeting" onclick="selectMode(this)">早安语<div class="lbl">greeting</div></button>
+            <button class="persona-btn" data-m="poetry" onclick="selectMode(this)">每日诗词<div class="lbl">poetry</div></button>
+            <button class="persona-btn" data-m="jokes" onclick="selectMode(this)">每日笑话<div class="lbl">jokes</div></button>
+            <button class="persona-btn" data-m="cold_knowledge" onclick="selectMode(this)">冷知识<div class="lbl">cold</div></button>
+            <button class="persona-btn" data-m="thisday" onclick="selectMode(this)">历史今天<div class="lbl">thisday</div></button>
+            <button class="persona-btn" data-m="riddle" onclick="selectMode(this)">脑筋急转弯<div class="lbl">riddle</div></button>
+            <button class="persona-btn" data-m="quote" onclick="selectMode(this)">每日语录<div class="lbl">quote</div></button>
+          </div>
+        </div>
+
+        <div class="persona-section">
+          <div class="persona-section-title">工具 & 生活（8）</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+            <button class="persona-btn" data-m="word" onclick="selectMode(this)">每日单词<div class="lbl">word</div></button>
+            <button class="persona-btn" data-m="wisdom" onclick="selectMode(this)">人生感悟<div class="lbl">wisdom</div></button>
+            <button class="persona-btn" data-m="health" onclick="selectMode(this)">天气养生<div class="lbl">health</div></button>
+            <button class="persona-btn" data-m="recipe" onclick="selectMode(this)">时令菜谱<div class="lbl">recipe</div></button>
+            <button class="persona-btn" data-m="book" onclick="selectMode(this)">每日书目<div class="lbl">book</div></button>
+            <button class="persona-btn" data-m="qa" onclick="selectMode(this)">百科问答<div class="lbl">qa</div></button>
+            <button class="persona-btn" data-m="chat" onclick="selectMode(this)">AI 对话<div class="lbl">chat</div></button>
+            <button class="persona-btn" data-m="art" onclick="selectMode(this)">每日美图<div class="lbl">art</div></button>
+          </div>
+        </div>
+
+        <button type="button" class="persona-fold-toggle" id="modesMoreToggle" onclick="toggleMoreModes()">展开更多模式</button>
+        <div id="modesMoreWrap" style="display:none">
+          <div class="persona-section">
+            <div class="persona-section-title">更多模式（5）</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+              <button class="persona-btn" data-m="horoscope" onclick="selectMode(this)">星座运程<div class="lbl">horoscope</div></button>
+              <button class="persona-btn" data-m="news" onclick="selectMode(this)">IT新闻<div class="lbl">news</div></button>
+              <button class="persona-btn" data-m="question" onclick="selectMode(this)">每日一问<div class="lbl">question</div></button>
+              <button class="persona-btn" data-m="goodnight" onclick="selectMode(this)">晚安语<div class="lbl">goodnight</div></button>
+              <button class="persona-btn" data-m="health_tip" onclick="selectMode(this)">健康提示<div class="lbl">health_tip</div></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 布局调节 -->
+    <div class="card" style="margin-top:12px">
+      <div class="card-header">布局调节</div>
+      <div class="card-body">
+        <div class="fg">
+          <label class="lbl">天气布局</label>
+          <div class="layout-grid">
+            <button class="layout-btn active" data-layout="standard" onclick="selectLayout(this)">标准</button>
+            <button class="layout-btn" data-layout="compact" onclick="selectLayout(this)">紧凑</button>
+            <button class="layout-btn" data-layout="full" onclick="selectLayout(this)">全屏大字</button>
+          </div>
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label class="lbl">目标页面</label>
+          <div style="display:flex;gap:6px">
+            <button class="layout-btn active" id="btnPage3" onclick="selectPage(3, this)" style="padding:6px 14px;font-size:.75rem">Page 3（内容）</button>
+            <button class="layout-btn" id="btnPage4" onclick="selectPage(4, this)" style="padding:6px 14px;font-size:.75rem">Page 4（天气）</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 生成按钮 -->
+    <button class="btn-generate" id="generateBtn" onclick="generate()">🔄 生成预览</button>
+
+    <!-- 快速预设 -->
+    <div class="card" style="margin-top:12px">
+      <div class="card-header">快速操作</div>
+      <div class="card-body">
+        <div class="preset-row">
+          <button class="btn" onclick="doPush()" style="flex:1;font-size:.78rem;padding:8px">▶ 推送当前模式</button>
+        </div>
+        <div class="preset-row" style="margin-top:6px">
+          <button class="btn btn-green" onclick="doPushPage3()" style="flex:1;font-size:.78rem;padding:8px">推送 Page 3</button>
+          <button class="btn btn-green" onclick="doPushPage4()" style="flex:1;font-size:.78rem;padding:8px">推送 Page 4</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const MODE_LABELS = {
+  history_photo:'历史照片', countdown:'节日倒计时', year_progress:'年进度',
+  greeting:'早安语', poetry:'每日诗词', jokes:'每日笑话', cold_knowledge:'冷知识',
+  thisday:'历史上的今天', riddle:'脑筋急转弯', quote:'每日语录',
+  word:'每日单词', wisdom:'人生感悟', health:'天气养生', recipe:'时令菜谱',
+  book:'每日书目', qa:'百科问答', chat:'AI对话', art:'每日美图',
+  horoscope:'星座运程', news:'IT之家新闻', question:'每日一问',
+  goodnight:'晚安语', health_tip:'健康提示'
+};
+
+// ── 状态 ───────────────────────────────────────────────────
+let currentMode = 'history_photo';
+let currentLayout = 'standard';
+let currentPage = 3;
+let currentAbortController = null;
+let renderHistory = [];
+
+// ── DOM ────────────────────────────────────────────────────
+const previewImg = document.getElementById('previewImg');
+const loadingOverlay = document.getElementById('loadingOverlay');
+const screenFrame = document.getElementById('screenFrame');
+const generateBtn = document.getElementById('generateBtn');
+
+// ── 模式选择 ───────────────────────────────────────────────
+function selectMode(btn) {
+  document.querySelectorAll('.persona-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMode = btn.dataset.m;
+
+  // 如果选了天气，自动切换到 Page 4
+  if (currentMode === 'weather') selectPage(4);
+  // 如果当前在 Page 4 选非天气，自动切 Page 3
+  else if (currentPage === 4) selectPage(3);
+
+  generate();
+}
+
+function toggleMoreModes() {
+  const wrap = document.getElementById('modesMoreWrap');
+  const btn = document.getElementById('modesMoreToggle');
+  const open = wrap.style.display === 'none';
+  wrap.style.display = open ? '' : 'none';
+  btn.textContent = open ? '收起更多模式' : '展开更多模式';
+}
+
+// ── 布局选择 ───────────────────────────────────────────────
+function selectLayout(btn) {
+  document.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentLayout = btn.dataset.layout;
+  document.getElementById('screenLabel').textContent =
+    currentMode === 'weather'
+      ? `${currentLayout} 天气布局 · 1-bit 单色`
+      : '400 × 300 · 1-bit 单色';
+}
+
+// ── 页面选择 ───────────────────────────────────────────────
+function selectPage(page, btn) {
+  currentPage = page;
+  if (btn) {
+    document.querySelectorAll('#btnPage3,#btnPage4').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+}
+
+// ── 生成预览 ──────────────────────────────────────────────
+async function generate() {
+  if (currentAbortController) { currentAbortController.abort(); }
+  currentAbortController = new AbortController();
+
+  generateBtn.disabled = true;
+  loadingOverlay.classList.add('active');
+
+  document.getElementById('infoStatus').textContent = '⏳ 生成中...';
+  document.getElementById('infoStatus').className = 'info-value';
+  document.getElementById('infoPersona').textContent = MODE_LABELS[currentMode] || currentMode;
+  document.getElementById('infoTime').textContent = '...';
+  document.getElementById('infoSize').textContent = '...';
+
+  const mode = currentMode === 'weather' ? 'weather' : currentMode;
+  const url = `/api/preview?mode=${encodeURIComponent(mode)}&page=${currentPage}&layout=${currentLayout}&t=${Date.now()}`;
+  const startTime = Date.now();
+
+  try {
+    const resp = await fetch(url, { signal: currentAbortController.signal });
+    const elapsed = Date.now() - startTime;
+    const blob = await resp.blob();
+
+    if (resp.ok) {
+      const imgUrl = URL.createObjectURL(blob);
+      previewImg.src = imgUrl;
+      document.getElementById('infoStatus').textContent = `✓ ${resp.status} 成功`;
+      document.getElementById('infoTime').textContent = `${elapsed}ms`;
+      document.getElementById('infoSize').textContent = `${(blob.size / 1024).toFixed(1)} KB`;
+
+      // 墨水屏闪动效果
+      screenFrame.classList.add('flash');
+      setTimeout(() => screenFrame.classList.remove('flash'), 500);
+
+      addToHistory(MODE_LABELS[currentMode] || currentMode, imgUrl, elapsed, blob.size);
+    } else {
+      document.getElementById('infoStatus').textContent = `✗ ${resp.status} 错误`;
+      document.getElementById('infoStatus').className = 'info-value error';
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      document.getElementById('infoStatus').textContent = '⚡ 已取消';
+    } else {
+      document.getElementById('infoStatus').textContent = '✗ 网络错误';
+      document.getElementById('infoStatus').className = 'info-value error';
+    }
+    document.getElementById('infoTime').textContent = '—';
+  }
+
+  loadingOverlay.classList.remove('active');
+  generateBtn.disabled = false;
+  currentAbortController = null;
+}
+
+// ── 渲染历史 ───────────────────────────────────────────────
+function addToHistory(label, imageUrl, elapsed, size) {
+  const entry = { label, imageUrl, elapsed, size, timestamp: new Date().toLocaleTimeString('zh-CN') };
+  renderHistory.unshift(entry);
+  if (renderHistory.length > 30) {
+    const removed = renderHistory.pop();
+    URL.revokeObjectURL(removed.imageUrl);
+  }
+  renderHistoryUI();
+}
+
+function renderHistoryUI() {
+  const container = document.getElementById('historyList');
+  if (renderHistory.length === 0) {
+    container.innerHTML = '<div style="padding:16px;text-align:center;font-size:.75rem;color:var(--text2)">暂无历史记录</div>';
+    return;
+  }
+  container.innerHTML = renderHistory.map((h, i) => `
+    <div class="history-item" onclick="viewHistoryItem(${i})">
+      <img class="history-thumb" src="${h.imageUrl}" alt="${h.label}">
+      <div class="history-info">
+        <div class="h-mode">${h.label}</div>
+        <div class="h-meta">${h.timestamp} · ${h.elapsed}ms · ${(h.size/1024).toFixed(1)}KB</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function viewHistoryItem(index) {
+  const h = renderHistory[index];
+  if (h) {
+    previewImg.src = h.imageUrl;
+    document.getElementById('infoPersona').textContent = h.label;
+    document.getElementById('infoTime').textContent = h.elapsed + 'ms';
+    document.getElementById('infoSize').textContent = (h.size/1024).toFixed(1) + ' KB';
+    document.getElementById('infoStatus').textContent = '✓ 从历史加载';
+    screenFrame.classList.add('flash');
+    setTimeout(() => screenFrame.classList.remove('flash'), 500);
+  }
+}
+
+function clearHistory() {
+  renderHistory.forEach(h => URL.revokeObjectURL(h.imageUrl));
+  renderHistory = [];
+  renderHistoryUI();
+}
+
+// ── 推送 ───────────────────────────────────────────────────
+async function doPush() {
+  const mode = currentMode === 'weather' ? 'weather' : currentMode;
+  const res = await apiFetch(`/api/push?mode=${encodeURIComponent(mode)}&page=${currentPage}&layout=${currentLayout}`);
+  if (res.ok) {
+    showToast('推送成功！', 'success');
+  } else {
+    showToast('推送失败: ' + (res.error || '未知错误'), 'error');
+  }
+}
+
+async function doPushPage3() {
+  const res = await apiFetch(`/api/push?mode=${encodeURIComponent(currentMode)}&page=3&layout=${currentLayout}`);
+  showToast(res.ok ? 'Page 3 推送成功' : 'Page 3 推送失败', res.ok ? 'success' : 'error');
+}
+
+async function doPushPage4() {
+  const res = await apiFetch(`/api/push?mode=weather&page=4&layout=${currentLayout}`);
+  showToast(res.ok ? 'Page 4 推送成功' : 'Page 4 推送失败', res.ok ? 'success' : 'error');
+}
+
+// ── 健康检查 ───────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/modes`);
+    if (res.ok) {
+      document.getElementById('healthText').textContent = '系统正常 · ' + (res.data?.count || 0) + ' 个模式';
+    } else {
+      throw new Error('API error');
+    }
+  } catch {
+    document.getElementById('healthText').textContent = '离线';
+    document.getElementById('healthBadge').style.color = 'var(--red)';
+    document.getElementById('healthBadge').style.borderColor = '#fecaca';
+    document.getElementById('healthBadge').style.background = '#fef2f2';
+  }
+}
+
+// ── 初始化 ──────────────────────────────────────────────────
+checkHealth();
+generate();
+</script>
+{% endblock %}

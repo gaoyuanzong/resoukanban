@@ -1,0 +1,318 @@
+{# templates/dashboard.html — 数据看板 #}
+{% extends "base.html" %}
+
+{% block title %}数据看板 · 墨水屏看板{% endblock %}
+
+{% block extra_head %}
+<style>
+.hero-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.hero-card h2 { font-size: 1.1rem; font-weight: 700; }
+
+/* 统计卡片网格 */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+
+/* 图表行 */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 760px) { .charts-row { grid-template-columns: 1fr; } }
+
+/* 纯 CSS 柱状图 */
+.bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding: 8px 0; }
+.bar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+.bar-col .bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.bar-col .bar {
+  width: 80%;
+  min-height: 4px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  transition: height .5s ease;
+}
+.bar-col .bar-label { font-size: .58rem; color: var(--text2); text-align: center; margin-top: 3px; }
+.bar-col .bar-val { font-size: .58rem; font-weight: 600; color: var(--text); }
+
+/* 模式使用频率条 */
+.mode-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.mode-bar .mode-name { font-size: .75rem; font-weight: 600; min-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mode-bar .mode-track { flex: 1; height: 18px; background: #f5f5f5; border-radius: 4px; overflow: hidden; }
+.mode-bar .mode-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+.mode-bar .mode-count { font-size: .7rem; color: var(--text2); min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 最近记录表格 */
+.render-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.render-table th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text2); }
+.render-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.render-table tr:last-child td { border-bottom: none; }
+
+/* 内容历史卡片 */
+.content-list { display: flex; flex-direction: column; gap: 10px; }
+.content-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg);
+  transition: border-color .15s;
+}
+.content-item:hover { border-color: var(--accent); }
+.content-item .ci-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.content-item .ci-mode { font-size: .72rem; font-weight: 600; }
+.content-item .ci-time { font-size: .65rem; color: var(--text2); }
+.content-item .ci-preview { font-size: .78rem; color: var(--text); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.content-item .ci-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.ci-status { font-size: .65rem; }
+
+/* 设备状态指示 */
+.device-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .72rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+.device-status.online { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.device-status.offline { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
+.device-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.online .device-status-dot { background: var(--green); }
+.offline .device-status-dot { background: var(--red); }
+
+/* 无数据提示 */
+.no-data { text-align: center; padding: 30px 20px; color: var(--text2); font-size: .82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 顶部栏 -->
+<div class="hero-card">
+  <h2>📊 数据看板</h2>
+  <div id="lastUpdate" style="font-size:.72rem;color:var(--text2)"></div>
+</div>
+
+<!-- 概览统计卡片 -->
+<div class="stats-grid" id="statsGrid">
+  <div class="stat-card">
+    <div class="stat-label">设备总数</div>
+    <div class="stat-value" id="statDevices">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">总渲染次数</div>
+    <div class="stat-value" id="statRenders">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">缓存命中率</div>
+    <div class="stat-value" id="statCacheRate">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">平均渲染时间</div>
+    <div class="stat-value" id="statAvgTime">—</div>
+  </div>
+</div>
+
+<!-- 两栏图表 -->
+<div class="charts-row">
+  <!-- 模式使用频率 -->
+  <div class="card">
+    <div class="card-header">模式使用频率</div>
+    <div class="card-body" id="modeFrequencyChart">
+      <div class="no-data">加载中...</div>
+    </div>
+  </div>
+
+  <!-- 每日渲染次数 -->
+  <div class="card">
+    <div class="card-header">每日渲染次数</div>
+    <div class="card-body" id="dailyRendersChart">
+      <div class="no-data">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 最近渲染记录 -->
+<div class="card">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>最近渲染记录</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="historyModeFilter" onchange="loadHistory()" style="font-size:.72rem;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:#fff">
+        <option value="">全部模式</option>
+      </select>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0;overflow-x:auto">
+    <table class="render-table" id="renderTable">
+      <thead><tr>
+        <th>时间</th>
+        <th>模式</th>
+        <th>页面</th>
+        <th>耗时</th>
+        <th>状态</th>
+      </tr></thead>
+      <tbody id="renderBody">
+        <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:20px">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 内容历史 -->
+<div class="card">
+  <div class="card-header">内容历史</div>
+  <div class="card-body">
+    <div class="content-list" id="contentList">
+      <div class="no-data">暂无内容历史</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const COLORS = ['#171717','#374151','#6b7280','#9ca3af','#d1d5db','#4b5563','#525252','#a3a3a3'];
+
+// ── 加载统计数据 ─────────────────────────────────────────────
+async function loadStats() {
+  const res = await apiFetch(`${API_BASE}/api/stats`);
+  if (!res.ok || !res.data) return;
+
+  const d = res.data;
+  document.getElementById('statDevices').textContent = d.devices ?? '—';
+  document.getElementById('statRenders').textContent = d.renders ?? '—';
+  document.getElementById('statCacheRate').textContent = (d.cache_rate ?? 0) + '%';
+  document.getElementById('statAvgTime').textContent = (d.avg_time_ms ?? 0) + 'ms';
+
+  // 模式使用频率
+  if (d.mode_frequency) renderModeFrequency(d.mode_frequency, d.total_renders || 1);
+  populateModeFilter(d.mode_frequency || {});
+
+  // 每日渲染
+  if (d.daily_renders) renderDailyChart(d.daily_renders);
+
+  document.getElementById('lastUpdate').textContent = '最后更新: ' + new Date().toLocaleTimeString('zh-CN');
+}
+
+// ── 模式频率柱状图 ──────────────────────────────────────────
+function renderModeFrequency(freq, total) {
+  const container = document.getElementById('modeFrequencyChart');
+  const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="no-data">暂无数据</div>';
+    return;
+  }
+  const maxCount = sorted[0][1];
+  container.innerHTML = sorted.slice(0, 12).map(([mode, count], i) => {
+    const pct = Math.round(count / total * 100);
+    const barPct = Math.round(count / maxCount * 100);
+    return `<div class="mode-bar">
+      <span class="mode-name">${mode}</span>
+      <div class="mode-track">
+        <div class="mode-fill" style="width:${barPct}%;background:${COLORS[i % COLORS.length]}"></div>
+      </div>
+      <span class="mode-count">${count} (${pct}%)</span>
+    </div>`;
+  }).join('');
+}
+
+// ── 每日渲染柱状图（纯 CSS） ───────────────────────────────
+function renderDailyChart(dailyRenders) {
+  const container = document.getElementById('dailyRendersChart');
+  if (!dailyRenders || dailyRenders.length === 0) {
+    container.innerHTML = '<div class="no-data">暂无数据</div>';
+    return;
+  }
+
+  const maxCount = Math.max(...dailyRenders.map(d => d.count), 1);
+  container.innerHTML = '<div class="bar-chart">' +
+    dailyRenders.map(d => {
+      const h = Math.round((d.count / maxCount) * 100);
+      return `<div class="bar-col">
+        <div class="bar-wrap">
+          <div class="bar" style="height:${h}%"></div>
+        </div>
+        <div class="bar-val">${d.count}</div>
+        <div class="bar-label">${d.date ? d.date.slice(5) : ''}</div>
+      </div>`;
+    }).join('') +
+  '</div>';
+}
+
+// ── 加载历史记录 ────────────────────────────────────────────
+async function loadHistory() {
+  const res = await apiFetch(`${API_BASE}/api/history`);
+  const tbody = document.getElementById('renderBody');
+
+  if (!res.ok || !res.data || res.data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2)">暂无记录</td></tr>';
+    return;
+  }
+
+  const modeFilter = document.getElementById('historyModeFilter').value;
+  let records = res.data;
+  if (modeFilter) records = records.filter(r => (r.mode || '') === modeFilter);
+
+  tbody.innerHTML = records.slice(-30).reverse().map(r => {
+    const time = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN') : '—';
+    const statusClass = r.pushed ? 'badge-success' : 'badge-error';
+    const statusTxt = r.pushed ? '成功' : '失败';
+    return `<tr>
+      <td style="font-size:.72rem;color:var(--text2)">${time}</td>
+      <td><strong>${r.mode || '-'}</strong></td>
+      <td><span class="badge badge-neutral">P${r.page || 3}</span></td>
+      <td style="font-variant-numeric:tabular-nums">${r.render_time_ms ? r.render_time_ms + 'ms' : '—'}</td>
+      <td><span class="badge ${statusClass}">${statusTxt}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 加载内容历史 ────────────────────────────────────────────
+async function loadContentHistory() {
+  const res = await apiFetch(`${API_BASE}/api/history`);
+  const container = document.getElementById('contentList');
+
+  if (!res.ok || !res.data || res.data.length === 0) {
+    container.innerHTML = '<div class="no-data">暂无内容历史</div>';
+    return;
+  }
+
+  const items = res.data.slice(-15).reverse();
+  container.innerHTML = items.map(r => {
+    const time = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN') : '—';
+    return `<div class="content-item">
+      <div class="ci-header">
+        <span class="ci-mode badge badge-neutral">${r.mode || '-'}</span>
+        <span class="ci-time">${time}</span>
+      </div>
+      <div class="ci-preview">${r.detail || r.mode || '无详细信息'}</div>
+      <div class="ci-footer">
+        <span class="ci-status">
+          <span class="device-status ${r.pushed ? 'online' : 'offline'}">
+            <span class="device-status-dot"></span>
+            ${r.pushed ? '推送成功' : '推送失败'}
+          </span>
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 填充模式筛选器 ──────────────────────────────────────────
+function populateModeFilter(freq) {
+  const select = document.getElementById('historyModeFilter');
+  select.innerHTML = '<option value="">全部模式</option>';
+  Object.keys(freq).forEach(m => {
+    select.innerHTML += `<option value="${m}">${m}</option>`;
+  });
+}
+
+// ── 初始化 ──────────────────────────────────────────────────
+loadStats();
+loadHistory();
+loadContentHistory();
+
+// 定时刷新
+setInterval(() => { loadStats(); loadHistory(); loadContentHistory(); }, 30000);
+</script>
+{% endblock %}

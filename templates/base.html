@@ -1,0 +1,404 @@
+{# templates/base.html — 公共框架 #}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}墨水屏看板{% endblock %}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #fafafa;
+  --card: #fff;
+  --border: #e5e5e5;
+  --text: #1a1a1a;
+  --text2: #737373;
+  --accent: #171717;
+  --accent-hover: #404040;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
+  --green-border: #bbf7d0;
+  --red: #dc2626;
+  --blue: #2563eb;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* 导航栏 */
+.nav {
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  height: 52px;
+  gap: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.nav-brand {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  margin-right: 32px;
+  color: #fff;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-brand span { font-weight: 400; opacity: .6; font-size: .85rem; }
+.nav-tabs { display: flex; height: 100%; }
+.nav-tab {
+  padding: 0 20px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-size: .85rem;
+  font-weight: 500;
+  color: rgba(255,255,255,.65);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  cursor: pointer;
+}
+.nav-tab:hover { color: #fff; background: rgba(255,255,255,.08); }
+.nav-tab.active { color: #fff; border-bottom-color: #fff; }
+
+.nav-right {
+  margin-left: auto;
+  font-size: .75rem;
+  color: rgba(255,255,255,.4);
+}
+
+/* 容器 */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 24px;
+}
+
+/* 卡片 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.card-header {
+  padding: 12px 16px;
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  background: #fafafa;
+}
+.card-body { padding: 16px; }
+
+/* 表单元素 */
+input, select, textarea {
+  font-family: inherit;
+  font-size: .85rem;
+}
+.inp {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+  transition: border-color .15s;
+}
+.inp:focus { border-color: var(--accent); }
+.sel {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+}
+.fg { margin-bottom: 16px; }
+.lbl {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+/* 按钮 */
+.btn {
+  padding: 8px 18px;
+  font-size: .82rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn:hover { background: var(--accent-hover); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-sm { padding: 5px 12px; font-size: .75rem; }
+.btn-secondary { background: #6b7280; }
+.btn-secondary:hover { background: #4b5563; }
+.btn-outline { background: #fff; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg); }
+.btn-green { background: var(--green); }
+.btn-green:hover { background: #15803d; }
+
+/* Chip 选择器 */
+.cg { display: flex; flex-wrap: wrap; gap: 6px; }
+.ch {
+  padding: 5px 11px;
+  font-size: .78rem;
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  cursor: pointer;
+  background: #fff;
+  color: var(--text2);
+  transition: all .15s;
+  user-select: none;
+}
+.ch:hover { border-color: var(--accent); color: var(--text); }
+.ch.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* 分组选择 pill */
+.pg { display: flex; gap: 6px; flex-wrap: wrap; }
+.pi {
+  flex: 1;
+  min-width: 60px;
+  padding: 6px 12px;
+  text-align: center;
+  font-size: .78rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+  color: var(--text2);
+  transition: all .15s;
+  user-select: none;
+}
+.pi:hover { background: var(--bg); border-color: var(--accent); color: var(--text); }
+.pi.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* 统计卡片 */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
+.stat-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text2); margin-bottom: 4px; }
+.stat-value { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-sub { font-size: .7rem; color: var(--text2); margin-top: 2px; }
+
+/* 徽章 */
+.badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
+.badge-success { background: var(--green-bg); color: #15803d; }
+.badge-error { background: #fef2f2; color: var(--red); }
+.badge-cache { background: #dbeafe; color: #1e40af; }
+.badge-neutral { background: #f3f4f6; color: #374151; }
+
+/* 表格 */
+.tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.tbl th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text2); }
+.tbl td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.tbl tr:last-child td { border-bottom: none; }
+
+/* Toast 通知 */
+#toastContainer { position: fixed; top: 68px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast {
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: .82rem;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,.12);
+  transform: translateX(120%);
+  transition: transform .3s ease, opacity .3s ease;
+  opacity: 0;
+  pointer-events: auto;
+  max-width: 360px;
+}
+.toast.show { transform: translateX(0); opacity: 1; }
+.toast-success { background: var(--green-bg); color: #15803d; border: 1px solid var(--green-border); }
+.toast-error { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
+.toast-info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.modal-overlay.active { opacity: 1; pointer-events: auto; }
+.modal-content { background: #fff; border-radius: 16px; padding: 24px; max-width: 560px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.modal-content h3 { font-size: 1.05rem; margin-bottom: 12px; }
+.modal-close { float: right; border: none; background: none; font-size: 1.2rem; cursor: pointer; color: var(--text2); }
+
+/* 确认对话框 */
+.confirm-bar { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+.confirm-bar .btn { padding: 8px 18px; font-size: .82rem; }
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 36px 20px; color: var(--text2); font-size: .85rem; }
+
+/* Loading spinner */
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .nav { padding: 0 12px; }
+  .nav-tab { padding: 0 12px; font-size: .78rem; }
+  .container { padding: 16px 12px; }
+}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- 导航栏 -->
+<nav class="nav">
+  <a href="/config" class="nav-brand">🖥 墨水屏看板</a>
+  <div class="nav-tabs">
+    <a href="/config" class="nav-tab{% if page == 'config' %} active{% endif %}" id="tabConfig">⚙️ 配置</a>
+    <a href="/preview" class="nav-tab{% if page == 'preview' %} active{% endif %}" id="tabPreview">👁️ 预览</a>
+    <a href="/dashboard" class="nav-tab{% if page == 'dashboard' %} active{% endif %}" id="tabDashboard">📊 数据看板</a>
+  </div>
+  <div class="nav-right">端口 8080 · Flask</div>
+</nav>
+
+<!-- 主内容区 -->
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+
+<!-- Toast 通知容器 -->
+<div id="toastContainer"></div>
+
+<!-- 确认对话框 -->
+<div id="confirmModal" class="modal-overlay" onclick="if(event.target===this)closeConfirm(false)">
+<div class="modal-content" style="max-width:380px">
+<p id="confirmMsg" style="font-size:.9rem;line-height:1.6"></p>
+<div class="confirm-bar">
+<button class="btn btn-outline" onclick="closeConfirm(false)">取消</button>
+<button class="btn" onclick="closeConfirm(true)">确定</button>
+</div>
+</div>
+</div>
+
+<script>
+// ── API 基础信息 ─────────────────────────────────────────────
+const API_BASE = window.location.origin;
+
+// ── Fetch 包装函数（带错误处理）──────────────────────────────
+async function apiFetch(url, opts = {}) {
+  try {
+    const r = await fetch(url, opts);
+    const contentType = r.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await r.json();
+      return { ok: r.ok, status: r.status, data };
+    }
+    return { ok: r.ok, status: r.status, blob: await r.blob() };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ── Toast 通知 ───────────────────────────────────────────────
+function showToast(msg, type = 'info', duration = 3000) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
+// ── 确认对话框 ─────────────────────────────────────────────
+let _confirmResolve = null;
+function showConfirm(msg) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmModal').classList.add('active');
+  });
+}
+function closeConfirm(result) {
+  document.getElementById('confirmModal').classList.remove('active');
+  if (_confirmResolve) { _confirmResolve(result); _confirmResolve = null; }
+}
+
+// ── 格式化 API 错误 ─────────────────────────────────────────
+function formatApiError(payload) {
+  if (!payload) return '';
+  if (typeof payload === 'string') return payload;
+  if (Array.isArray(payload.detail) && payload.detail.length > 0) {
+    const first = payload.detail[0];
+    if (first?.msg && Array.isArray(first?.loc)) {
+      return first.loc.slice(1).map((x, i) =>
+        typeof x === 'number' ? `[${x}]` : (i === 0 ? String(x) : `.${x}`)
+      ).join('') + ': ' + first.msg;
+    }
+    if (first?.msg) return first.msg;
+  }
+  if (typeof payload.detail === 'string') return payload.detail;
+  if (typeof payload.message === 'string') return payload.message;
+  if (typeof payload.error === 'string') return payload.error;
+  return '';
+}
+
+// ── Chip 切换辅助 ────────────────────────────────────────────
+function toggleChip(el) {
+  el.classList.toggle('sel');
+}
+
+// ── Pill 分组选择辅助 ────────────────────────────────────────
+function selectPill(el, groupId) {
+  document.querySelectorAll(`#${groupId} .pi`).forEach(i => i.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+// ── 时间格式化 ──────────────────────────────────────────────
+function timeAgo(isoStr) {
+  if (!isoStr) return '—';
+  const ms = Date.now() - new Date(isoStr).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + '秒前';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + '分钟前';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + '小时前';
+  return Math.floor(h / 24) + '天前';
+}
+
+function formatDateTime(isoStr) {
+  if (!isoStr) return '—';
+  return new Date(isoStr).toLocaleString('zh-CN');
+}
+</script>
+
+{% block extra_script %}{% endblock %}
+</body>
+</html>
