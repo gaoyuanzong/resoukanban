@@ -854,22 +854,7 @@ def mode_horoscope():
 
     push_image(img, 3)
 
-# ================= 模式20: 天气看板（复用已有） =================
-def mode_news():
-    """渲染新闻到 page 3"""
-    news = get_ithome_news()
-    img = new_image()
-    draw = ImageDraw.Draw(img)
-    draw.text((10, 8), "IT之家 热门排行", font=font_small, fill=0)
-    draw.line([(10, 24), (390, 24)], fill=0)
-    y = 32
-    for i, n in enumerate(news[:12], 1):
-        draw.text((10, y), f"{i}. {n['title']}", font=font_tiny, fill=0)
-        y += 21
-        if y > 290:
-            break
-    push_image(img, 3)
-
+# ================= 模式20: IT之家新闻 =================
 # ================= 模式22: 每日一问 =================
 @mode_register("question", "每日一问")
 def mode_question():
@@ -893,27 +878,13 @@ def mode_question():
 def mode_health_tip():
     """通过 ccgen 根据当前季节生成健康提示"""
     ccgen("请生成6条春季健康生活小贴士，每条不超过18字，涵盖饮食、运动、作息、情绪等方面，一行一条，直接输出纯文本", "health_tip.txt")
-def mode_news():
-    """渲染新闻到 page 3"""
-    news = get_ithome_news()
-    img = new_image()
-    draw = ImageDraw.Draw(img)
-    draw.text((10, 8), "IT之家 热门排行", font=font_small, fill=0)
-    draw.line([(10, 24), (390, 24)], fill=0)
-    y = 32
-    for i, n in enumerate(news[:12], 1):
-        draw.text((10, y), f"{i}. {n['title']}", font=font_tiny, fill=0)
-        y += 21
-        if y > 290:
-            break
-    push_image(img, 3)
-
+    lines = read_ccgen("health_tip.txt")
+    if not lines:
+        lines = ["春季宜早睡早起，多晒太阳"]
 
     img = new_image()
     draw = ImageDraw.Draw(img)
-
     draw.text((200, 15), "🍀 健康生活", font=font_title, fill=0, anchor="mt")
-
     y = 50
     for line in lines[:8]:
         line = line.strip()
@@ -924,7 +895,25 @@ def mode_news():
         y += 28
         if y > 280:
             break
+    push_image(img, 3)
 
+@mode_register("news", "IT之家新闻")
+def mode_news():
+    """从预生成内容池渲染新闻到 page 3"""
+    lines = read_ccgen("news.txt")
+    img = new_image()
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 8), "IT之家 热门排行", font=font_small, fill=0)
+    draw.line([(10, 24), (390, 24)], fill=0)
+    y = 32
+    for i, line in enumerate(lines[:12], 1):
+        line = line.strip()
+        if not line:
+            continue
+        draw.text((10, y), f"{i}. {line}", font=font_tiny, fill=0)
+        y += 21
+        if y > 290:
+            break
     push_image(img, 3)
 
 # ================= 模式24: 晚安语（独立模式） =================
