@@ -8,10 +8,15 @@ import requests
 import calendar
 import re
 import subprocess
+import json
+import datetime
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
 Image.MAX_IMAGE_PIXELS = None  # 禁用解压炸弹检查
 from datetime import datetime, timedelta
 from zhdate import ZhDate
+
+# 生成历史文件
+CCGEN_HISTORY_FILE = "/tmp/ccgen_history.json"
 
 # Phase 1 新模块
 from config_reader import Config
@@ -101,13 +106,51 @@ def ccgen(prompt, filename):
         "/home/gaoyuan/nodejs/bin/claude", "--permission-mode", "bypassPermissions", "--print",
         f"{prompt}。{lang_suffix}{output}"
     ]
+    start_time = datetime.now()
+    ok = False
+    error_msg = ""
     try:
-        result = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=120)
         if result.returncode == 0:
+            ok = True
+            elapsed_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            _record_ccgen_history(filename, ok, elapsed_ms, "")
             return output
+        else:
+            error_msg = result.stderr.strip() or f"exit {result.returncode}"
     except Exception as e:
-        print(f"ccgen 失败: {e}")
+        error_msg = str(e)
+    elapsed_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+    # 记录到历史文件
+    _record_ccgen_history(filename, ok, elapsed_ms, error_msg)
     return None
+
+
+def _record_ccgen_history(filename, ok, elapsed_ms, error_msg=""):
+    """将 ccgen 调用记录写入 /tmp/ccgen_history.json"""
+    try:
+        if os.path.exists(CCGEN_HISTORY_FILE):
+            with open(CCGEN_HISTORY_FILE, encoding="utf-8") as f:
+                records = json.load(f)
+        else:
+            records = []
+    except Exception:
+        records = []
+    # 清理只保留最近100条
+    records.append({
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "filename": filename,
+        "ok": ok,
+        "elapsed_ms": elapsed_ms,
+        "error_msg": error_msg,
+    })
+    if len(records) > 100:
+        records = records[-100:]
+    try:
+        with open(CCGEN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False)
+    except Exception:
+        pass
 
 def read_ccgen(filename):
     """从内容池读取全部内容行"""
