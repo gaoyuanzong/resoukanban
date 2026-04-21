@@ -169,7 +169,14 @@ def push_image(img, page_id):
     data = {"dither": "true", "pageId": str(page_id)}
     try:
         res = requests.post(PUSH_URL, headers=api_headers, files=files, data=data)
-        print(f"Page {page_id} 推送成功: {res.status_code}")
+        try:
+            j = res.json()
+            if j.get("code") == 0:
+                print(f"Page {page_id} 推送成功: {j.get('msg','ok')}")
+            else:
+                print(f"Page {page_id} 推送失败[{j.get('code','?')}]: {j.get('msg','未知错误')}")
+        except Exception:
+            print(f"Page {page_id} 推送成功: HTTP {res.status_code}")
     except Exception as e:
         print(f"Page {page_id} 推送失败: {e}")
 
