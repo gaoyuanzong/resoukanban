@@ -1,22 +1,42 @@
-# 墨水屏看板配置文件
-# Page 3 设置
-page3:
-  # 启用的模式列表（空=全部23个模式）
-  modes: []
-  # 强制模式：null=随机, jokes=固定笑话...
-  force_mode: null
-  layout: default
-
-# Page 4 设置（天气）
-page4:
-  # 布局: standard=标准, compact=紧凑, full=全屏大字
-  layout: standard
-
-# 全局页面启用
-enabled_pages: [3, 4]
-
-# 推送历史
+city: 杭州
+content_tone: humor
+enabled_pages:
+- 3
+- 4
 history:
   enabled: true
-  max_entries: 100
   file: history.json
+  max_entries: 100
+language: zh
+page3:
+  force_mode: null
+  layout: default
+  modes:
+  - history_photo
+  - countdown
+  - year_progress
+  - greeting
+  - poetry
+  - jokes
+  - cold_knowledge
+  - thisday
+  - riddle
+  - quote
+  - word
+  - wisdom
+  - health
+  - recipe
+  - book
+  - qa
+  - chat
+  - art
+  - horoscope
+  - news
+  - question
+  - goodnight
+  - health_tip
+page4:
+  layout: standard
+refresh_interval: 60
+refresh_strategy: random
+time_slot_rules: []

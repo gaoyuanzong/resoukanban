@@ -71,7 +71,7 @@ def get_mode_preview_png(mode_id: str, page: int = 3, layout: str = "standard") 
         saved_files[page_id] = path
 
     mod.push_image = mock_push
-    mod.ccgen = ccgen
+    mod.ccgen = lambda p, f: None
     def _read_ccgen_a(filename):
         path = os.path.join(CCGEN_DIR, filename)
         if os.path.exists(path):
@@ -231,6 +231,10 @@ def get_config(config_path: str = None) -> dict:
         "page4_layout": cfg.page4_layout,
         "history_enabled": cfg.history_enabled,
         "history_max": cfg.history_max,
+        "language": cfg.get_language(),
+        "content_tone": cfg.get_content_tone(),
+        "refresh_strategy": cfg.get_refresh_strategy(),
+        "time_slot_rules": cfg.get_time_slot_rules(),
     }
 
 
@@ -270,15 +274,11 @@ def update_config(updates: dict, config_path: str = None) -> dict:
     if "page3_modes" in updates:
         cfg_dict["page3"]["modes"] = updates["page3_modes"]
     if "language" in updates:
-        cfg_dict.setdefault("language", updates["language"])
+        cfg_dict["language"] = updates["language"]
     if "content_tone" in updates:
-        cfg_dict.setdefault("content_tone", updates["content_tone"])
+        cfg_dict["content_tone"] = updates["content_tone"]
     if "city" in updates:
         cfg_dict.setdefault("city", updates["city"])
-    if "llm_provider" in updates:
-        cfg_dict.setdefault("llm_provider", updates["llm_provider"])
-    if "llm_model" in updates:
-        cfg_dict.setdefault("llm_model", updates["llm_model"])
     if "refresh_interval" in updates:
         cfg_dict.setdefault("refresh_interval", updates["refresh_interval"])
     if "refresh_strategy" in updates:
@@ -448,3 +448,106 @@ def get_render_history(limit: int = 50) -> list:
         }
         for e in entries
     ]
+
+
+# ── ccgen 重新生成 API ────────────────────────────────────────
+
+# mode_id → (filename, prompt模板)
+_MODE_REGEN_MAP = {
+    "poetry":        ("poetry.txt",         "请生成5首经典中国古诗词（唐诗或宋词），每首包含：诗题、作者（朝代·姓名）、正文（4句，每句一行），每首之间用空行分隔。格式示例：\n静夜思\n唐·李白\n床前明月光\n疑是地上霜\n举头望明月\n低头思故乡\n\n（第二首...）直接输出纯文本"),
+    "jokes":         ("jokes.txt",          "请生成8个幽默中文笑话，每个不超过25字，一行一个笑话，不要编号，直接输出纯文本"),
+    "cold_knowledge":("cold_knowledge.txt", "请生成8条有趣的生活冷知识/小窍门，每条不超过20字，一行一条，直接输出纯文本"),
+    "thisday":       ("thisday.txt",        "请生成5条{month}月{day}日历史上发生的重大事件，每条不超过25字，一行一条，直接输出纯文本"),
+    "riddle":        ("riddle.txt",         "请生成5个脑筋急转弯，每条格式：问题？|答案，用'|'分隔问题与答案，直接输出纯文本，一行一组"),
+    "quote":         ("quote.txt",          "请生成5条中英文名人语录，每条格式：'语录内容' — 作者，一行一条，直接输出纯文本"),
+    "word":          ("word.txt",           "请生成8个常用英语单词及其中文释义，格式：word - 中文释义，一行一个，直接输出纯文本"),
+    "wisdom":        ("wisdom.txt",         "请生成6条人生感悟/哲理句子，每条不超过20字，一行一条，直接输出纯文本"),
+    "health":        ("health.txt",         "请生成6条根据当前天气（春季）的生活养生小贴士，每条不超过20字，一行一条，直接输出纯文本"),
+    "recipe":        ("recipe.txt",         "请生成4道时令家常菜谱，每道包含：菜名 + 一句话做法，用'｜'分隔，格式示例：番茄炒蛋｜简单快手，两分钟出锅。一行一道菜，直接输出纯文本"),
+    "book":          ("book.txt",           "请生成3本推荐书籍，每本包含：书名、作者、一句话推荐理由，用'｜'分隔，格式示例：活着｜余华｜人生的无奈与坚韧。一行一本，直接输出纯文本"),
+    "qa":            ("qa.txt",             "请生成4个有趣的百科知识问答，每组格式：问题？|答案，用'|'分隔，直接输出纯文本，一行一组"),
+    "chat":          ("chat.txt",           "请生成一段有趣的中文 AI 与人的对话，不少于5轮，格式：人：xxx | AI：xxx，一行一轮，直接输出纯文本"),
+    "art":           ("art.txt",            "请为一张风景图片生成3段配文（每段不超过15字），描述自然风光或情感意境，直接输出纯文本，一行一段"),
+    "horoscope":     ("horoscope.txt",      "请为{sign}生成今日（{month}月{day}日）运程，包括：整体运势、爱情运势、工作运势，各用一句话描述不超过15字，格式：整体运势：xxx | 爱情运势：xxx | 工作运势：xxx，直接输出纯文本"),
+    "question":      ("question.txt",       "请生成1个有趣的人生问题或思考题，不超过30字，直接输出纯文本，不要任何前缀说明"),
+    "health_tip":    ("health_tip.txt",     "请生成6条春季健康生活小贴士，每条不超过18字，涵盖饮食、运动、作息、情绪等方面，一行一条，直接输出纯文本"),
+    "goodnight":     ("goodnight.txt",      "请生成5条温馨的晚安问候语，每条不超过15字，包含温暖祝福，一行一条，直接输出纯文本"),
+}
+
+
+def regenerate_mode(mode_id: str) -> dict:
+    """
+    重新生成指定模式的内容文件（调用 ccgen），返回结果
+    """
+    import datetime as dt
+
+    if mode_id not in _MODE_REGEN_MAP:
+        return {"ok": False, "message": f"模式 {mode_id} 不支持独立重新生成", "elapsed_ms": 0}
+
+    filename, prompt_template = _MODE_REGEN_MAP[mode_id]
+
+    # 动态构建 prompt
+    now = dt.datetime.now()
+    prompt = prompt_template
+    if "{month}" in prompt or "{day}" in prompt:
+        prompt = prompt.replace("{month}", str(now.month)).replace("{day}", str(now.day))
+    if "{sign}" in prompt:
+        signs = ["白羊座", "金牛座", "双子座", "巨蟹座", "狮子座", "处女座",
+                 "天秤座", "天蝎座", "射手座", "摩羯座", "水瓶座", "双鱼座"]
+        prompt = prompt.replace("{sign}", random.choice(signs))
+
+    # 注入 .env
+    env_file = PROJECT_DIR / ".env"
+    if env_file.exists():
+        with open(env_file) as ef:
+            for line in ef:
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    k, v = line.split('=', 1)
+                    os.environ.setdefault(k, v)
+
+    # 调用 ccgen（从 main 模块导入）
+    start_time = dt.datetime.now()
+    try:
+        result_path = ccgen(prompt, filename)
+        elapsed_ms = int((dt.datetime.now() - start_time).total_seconds() * 1000)
+        if result_path:
+            return {"ok": True, "message": f"{filename} 生成成功", "elapsed_ms": elapsed_ms}
+        else:
+            return {"ok": False, "message": "生成失败，内容文件未生成", "elapsed_ms": elapsed_ms}
+    except Exception as e:
+        elapsed_ms = int((dt.datetime.now() - start_time).total_seconds() * 1000)
+        return {"ok": False, "message": f"生成异常: {e}", "elapsed_ms": elapsed_ms}
+
+
+def get_gen_history(limit: int = 20) -> list:
+    """
+    从 /tmp/ccgen_history.json 读取最近 limit 条生成记录
+    """
+    hist_file = Path("/tmp/ccgen_history.json")
+    if not hist_file.exists():
+        return []
+
+    try:
+        with open(hist_file, encoding="utf-8") as f:
+            records = json.load(f)
+    except Exception:
+        return []
+
+    # 逆序，取最近 limit 条，每条补充 mode 名称
+    mode_names = dict(get_modes())
+    recent = []
+    for rec in records[-limit:]:
+        # filename → mode_id 映射（取同名部分）
+        fname = rec.get("filename", "")
+        # 简单转换：poetry.txt → poetry, cold_knowledge.txt → cold_knowledge
+        mode_id = fname.replace(".txt", "")
+        recent.append({
+            "time": rec.get("time", ""),
+            "mode": mode_id,
+            "mode_name": mode_names.get(mode_id, mode_id),
+            "ok": rec.get("ok", False),
+            "elapsed_ms": rec.get("elapsed_ms", 0),
+            "error_msg": rec.get("error_msg", ""),
+        })
+    return recent

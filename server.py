@@ -21,7 +21,8 @@ sys.path.insert(0, str(PROJECT_DIR))
 from api import (
     get_modes, get_mode_preview_png, push_mode,
     get_history, get_config, update_config,
-    get_stats, get_mode_catalog, trigger_refresh
+    get_stats, get_mode_catalog, trigger_refresh,
+    regenerate_mode, get_gen_history
 )
 
 app = Flask(__name__, template_folder='templates')
@@ -120,6 +121,23 @@ def api_mode_catalog():
     """返回模式目录（22 个模式的元数据）"""
     catalog = get_mode_catalog()
     return jsonify({"ok": True, "data": catalog})
+
+@app.route('/api/regenerate', methods=['POST'])
+def api_regenerate():
+    """重新生成指定模式的内容文件（调用 ccgen）"""
+    data = request.get_json() or {}
+    mode = data.get("mode", "")
+    if not mode:
+        return jsonify({"ok": False, "message": "缺少 mode 参数", "elapsed_ms": 0}), 400
+    result = regenerate_mode(mode)
+    return jsonify(result)
+
+@app.route('/api/gen_history', methods=['GET'])
+def api_gen_history():
+    """返回最近生成记录（从 ccgen_history.json）"""
+    limit = int(request.args.get("limit", 20))
+    history = get_gen_history(limit)
+    return jsonify({"ok": True, "data": history})
 
 # ── 静态文件（可选） ─────────────────────────────────────────
 

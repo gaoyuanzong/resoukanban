@@ -114,6 +114,55 @@
 .refresh-status { font-size: .75rem; color: var(--text2); margin-top: 8px; }
 .refresh-status.success { color: var(--green); }
 .refresh-status.error { color: var(--red); }
+
+/* 重新生成按钮 */
+.regen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  margin-left: 4px;
+  vertical-align: middle;
+  transition: all .15s;
+  text-decoration: none;
+  padding: 0;
+  font-family: inherit;
+}
+.regen-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.regen-btn.loading { opacity: .5; pointer-events: none; }
+.regen-btn .spin { width: 10px; height: 10px; border-width: 1.5px; }
+
+/* 生成日志区域 */
+.gen-log-section { margin-top: 20px; }
+.gen-log-table { width: 100%; font-size: .78rem; border-collapse: collapse; }
+.gen-log-table th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text2); white-space: nowrap; }
+.gen-log-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.gen-log-table tr:last-child td { border-bottom: none; }
+.gen-log-table .mode-cell { font-weight: 600; }
+.gen-log-empty { padding: 24px; text-align: center; color: var(--text2); font-size: .82rem; }
+
+/* 语言/调性变更提示 */
+.change-hint {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: .8rem;
+  color: #92400e;
+  margin-top: 10px;
+}
+.change-hint.visible { display: flex; }
 </style>
 {% endblock %}
 
@@ -152,25 +201,25 @@
           <span class="ch" data-m="countdown" onclick="tc(this)">节日倒计时</span>
           <span class="ch" data-m="year_progress" onclick="tc(this)">年进度</span>
           <span class="ch" data-m="greeting" onclick="tc(this)">早安语</span>
-          <span class="ch" data-m="poetry" onclick="tc(this)">每日诗词</span>
-          <span class="ch" data-m="jokes" onclick="tc(this)">每日笑话</span>
-          <span class="ch" data-m="cold_knowledge" onclick="tc(this)">冷知识</span>
-          <span class="ch" data-m="thisday" onclick="tc(this)">历史上的今天</span>
-          <span class="ch" data-m="riddle" onclick="tc(this)">脑筋急转弯</span>
-          <span class="ch" data-m="quote" onclick="tc(this)">每日语录</span>
+          <span class="ch" data-m="poetry" onclick="tc(this)">每日诗词<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('poetry',this)">↻</span></span>
+          <span class="ch" data-m="jokes" onclick="tc(this)">每日笑话<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('jokes',this)">↻</span></span>
+          <span class="ch" data-m="cold_knowledge" onclick="tc(this)">冷知识<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('cold_knowledge',this)">↻</span></span>
+          <span class="ch" data-m="thisday" onclick="tc(this)">历史上的今天<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('thisday',this)">↻</span></span>
+          <span class="ch" data-m="riddle" onclick="tc(this)">脑筋急转弯<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('riddle',this)">↻</span></span>
+          <span class="ch" data-m="quote" onclick="tc(this)">每日语录<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('quote',this)">↻</span></span>
         </div>
       </div>
       <div class="mode-group">
         <div class="mode-group-label">工具 & 生活（8）</div>
         <div class="cg" id="modesTools">
-          <span class="ch" data-m="word" onclick="tc(this)">每日单词</span>
-          <span class="ch" data-m="wisdom" onclick="tc(this)">人生感悟</span>
-          <span class="ch" data-m="health" onclick="tc(this)">天气养生</span>
-          <span class="ch" data-m="recipe" onclick="tc(this)">时令菜谱</span>
-          <span class="ch" data-m="book" onclick="tc(this)">每日书目</span>
-          <span class="ch" data-m="qa" onclick="tc(this)">百科问答</span>
-          <span class="ch" data-m="chat" onclick="tc(this)">AI 对话</span>
-          <span class="ch" data-m="art" onclick="tc(this)">每日美图</span>
+          <span class="ch" data-m="word" onclick="tc(this)">每日单词<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('word',this)">↻</span></span>
+          <span class="ch" data-m="wisdom" onclick="tc(this)">人生感悟<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('wisdom',this)">↻</span></span>
+          <span class="ch" data-m="health" onclick="tc(this)">天气养生<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('health',this)">↻</span></span>
+          <span class="ch" data-m="recipe" onclick="tc(this)">时令菜谱<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('recipe',this)">↻</span></span>
+          <span class="ch" data-m="book" onclick="tc(this)">每日书目<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('book',this)">↻</span></span>
+          <span class="ch" data-m="qa" onclick="tc(this)">百科问答<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('qa',this)">↻</span></span>
+          <span class="ch" data-m="chat" onclick="tc(this)">AI 对话<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('chat',this)">↻</span></span>
+          <span class="ch" data-m="art" onclick="tc(this)">每日美图<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('art',this)">↻</span></span>
         </div>
       </div>
       <button type="button" class="btn btn-outline btn-sm" id="modesMoreToggle" onclick="toggleMoreModes()" style="margin:8px 0">展开更多模式</button>
@@ -178,11 +227,11 @@
         <div class="mode-group">
           <div class="mode-group-label">更多模式（4）</div>
           <div class="cg" id="modesMore">
-            <span class="ch" data-m="horoscope" onclick="tc(this)">星座运程</span>
+            <span class="ch" data-m="horoscope" onclick="tc(this)">星座运程<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('horoscope',this)">↻</span></span>
             <span class="ch" data-m="news" onclick="tc(this)">IT之家新闻</span>
-            <span class="ch" data-m="question" onclick="tc(this)">每日一问</span>
-            <span class="ch" data-m="goodnight" onclick="tc(this)">晚安语</span>
-            <span class="ch" data-m="health_tip" onclick="tc(this)">健康提示</span>
+            <span class="ch" data-m="question" onclick="tc(this)">每日一问<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('question',this)">↻</span></span>
+            <span class="ch" data-m="goodnight" onclick="tc(this)">晚安语<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('goodnight',this)">↻</span></span>
+            <span class="ch" data-m="health_tip" onclick="tc(this)">健康提示<span class="regen-btn" title="重新生成" onclick="event.stopPropagation();regenMode('health_tip',this)">↻</span></span>
           </div>
         </div>
       </div>
@@ -244,6 +293,9 @@
           <div class="pi" data-v="deep" onclick="selectPill(this,'tone')">深沉内省</div>
           <div class="pi" data-v="humor" onclick="selectPill(this,'tone')">轻松幽默</div>
         </div>
+        <div class="change-hint" id="changeHint">
+          ⚠️ 内容已变更，下次生成时生效
+        </div>
       </div>
     </div>
   </div>
@@ -275,32 +327,6 @@
         <div class="pi" data-v="full" onclick="selectPill(this,'weatherLayout')">全屏大字</div>
       </div>
       <div style="font-size:.7rem;color:var(--text2);margin-top:6px">选中布局后点击"预览效果"可查看不同天气布局效果</div>
-    </div>
-  </div>
-
-  <!-- AI 模型配置 -->
-  <div class="config-section">
-    <div class="config-section-header">
-      <span>🤖 AI 模型配置</span>
-    </div>
-    <div class="config-section-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="fg">
-          <label class="lbl">AI 提供商</label>
-          <select class="sel" id="llmProvider" onchange="updateModelList()">
-            <option value="anthropic">Claude (Anthropic)</option>
-            <option value="deepseek">DeepSeek</option>
-            <option value="aliyun">阿里百炼</option>
-            <option value="moonshot">月之暗面</option>
-          </select>
-        </div>
-        <div class="fg">
-          <label class="lbl">AI 模型</label>
-          <select class="sel" id="llmModel">
-            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-          </select>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -357,6 +383,17 @@
     <div style="text-align:center">
       <img id="inlinePreviewImg" class="preview-img" alt="Preview">
       <div class="preview-meta" id="inlinePreviewMeta"></div>
+    </div>
+  </div>
+
+  <!-- 生成日志 -->
+  <div class="config-section gen-log-section" id="genLogSection">
+    <div class="config-section-header">
+      <span>📜 生成日志</span>
+      <button class="btn btn-outline btn-sm" onclick="loadGenHistory()" style="padding:3px 10px;font-size:.7rem">刷新</button>
+    </div>
+    <div class="config-section-body" id="genLogBody">
+      <div class="gen-log-empty">加载中...</div>
     </div>
   </div>
 </div>
@@ -417,41 +454,10 @@ const strategyDescs = {
   smart: '根据时间段自动匹配最佳模式（早晨/工作/休闲等）'
 };
 
-const llmModels = {
-  anthropic: [
-    { v: 'claude-sonnet-4-6', n: 'Claude Sonnet 4.6' },
-    { v: 'claude-opus-4-6', n: 'Claude Opus 4.6' },
-  ],
-  deepseek: [
-    { v: 'deepseek-chat', n: 'DeepSeek Chat' },
-    { v: 'deepseek-coder', n: 'DeepSeek Coder' },
-  ],
-  aliyun: [
-    { v: 'qwen-max', n: '通义千问 Max' },
-    { v: 'qwen-plus', n: '通义千问 Plus' },
-  ],
-  moonshot: [
-    { v: 'moonshot-v1-8k', n: 'Kimi K1.5' },
-    { v: 'moonshot-v1-32k', n: 'Kimi 32K' },
-  ],
-};
-
 let currentLayout = 'standard';
 let currentSelectedModes = [];
 
 // ── 初始化 ──────────────────────────────────────────────────
-function updateModelList() {
-  const provider = document.getElementById('llmProvider').value;
-  const sel = document.getElementById('llmModel');
-  sel.innerHTML = '';
-  (llmModels[provider] || []).forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m.v;
-    opt.textContent = m.n;
-    sel.appendChild(opt);
-  });
-}
-
 function updateSelectedCount() {
   const count = document.querySelectorAll('#configForm .cg .ch.sel').length;
   document.getElementById('selectedCount').textContent = `已选 ${count} 个`;
@@ -629,8 +635,6 @@ function collectFormData() {
     language: document.querySelector('#language .pi.sel')?.dataset.v || 'zh',
     content_tone: document.querySelector('#tone .pi.sel')?.dataset.v || 'positive',
     city: document.getElementById('city').value.trim() || '杭州',
-    llm_provider: document.getElementById('llmProvider').value,
-    llm_model: document.getElementById('llmModel').value,
     refresh_interval: parseInt(document.getElementById('refreshInterval').value) || 60,
     refresh_strategy: document.querySelector('#strategy .pi.sel')?.dataset.v || 'random',
     time_slot_rules: getTimeSlotRules(),
@@ -812,14 +816,120 @@ async function loadHistory() {
   document.getElementById('configForm').style.display = 'none';
 }
 
+// ── 重新生成 ───────────────────────────────────────────────
+let _lastLang = '', _lastTone = '';
+
+async function regenMode(modeId, btnEl) {
+  const btn = btnEl;
+  if (btn.classList.contains('loading')) return;
+
+  // 保存当前预览状态（哪个模式被选中）
+  const sel = document.querySelector('#configForm .cg .ch.sel');
+  const selMode = sel ? sel.dataset.m : null;
+
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const res = await apiFetch(`${API_BASE}/api/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: modeId }),
+    });
+
+    if (res.ok && res.data && res.data.ok) {
+      showToast(`${MODE_META[modeId]?.name || modeId} 重新生成成功 (${res.data.elapsed_ms}ms)`, 'success');
+    } else {
+      showToast(`${MODE_META[modeId]?.name || modeId} 生成失败: ${res.data?.message || res.error || '未知错误'}`, 'error');
+    }
+  } catch (e) {
+    showToast('重新生成失败: ' + e.message, 'error');
+  }
+
+  btn.classList.remove('loading');
+  btn.innerHTML = '↻';
+
+  // 刷新生成日志
+  loadGenHistory();
+
+  // 如果当前选中的就是这个模式，刷新缩略图
+  if (selMode === modeId) {
+    const img = document.getElementById('modeThumbImg');
+    if (img) img.src = `${API_BASE}/api/preview?mode=${modeId}&page=3&layout=standard&t=${Date.now()}`;
+  }
+}
+
+// ── 语言/调性变更提示 ──────────────────────────────────────
+function showChangeHint() {
+  const el = document.getElementById('changeHint');
+  if (el) el.classList.add('visible');
+}
+
+// 语言/调性切换时显示提示
+function selectPill(el, groupId) {
+  // 找到同组其他 .pi 移除 sel
+  const pg = el.closest('.pg');
+  if (!pg) return;
+  pg.querySelectorAll('.pi').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel');
+  if (groupId === 'language' || groupId === 'tone') {
+    showChangeHint();
+  }
+}
+
+// ── 生成日志 ───────────────────────────────────────────────
+async function loadGenHistory() {
+  const body = document.getElementById('genLogBody');
+  if (!body) return;
+  body.innerHTML = '<div class="gen-log-empty">加载中...</div>';
+  try {
+    const res = await apiFetch(`${API_BASE}/api/gen_history?limit=20`);
+    const records = res.ok && res.data && res.data.data ? res.data.data : [];
+    if (records.length === 0) {
+      body.innerHTML = '<div class="gen-log-empty">暂无生成记录</div>';
+      return;
+    }
+    body.innerHTML = `
+      <table class="gen-log-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>模式</th>
+            <th>状态</th>
+            <th>耗时</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${records.map(r => {
+            const okCls = r.ok ? 'badge-success' : 'badge-error';
+            const okTxt = r.ok ? '成功' : '失败';
+            const errTxt = r.error_msg ? `<span title="${r.error_msg.replace(/"/g,'&quot;')}" style="color:var(--red);font-size:.7rem;margin-left:4px">⚠</span>` : '';
+            return `<tr>
+              <td style="color:var(--text2);white-space:nowrap">${r.time ? r.time.substring(5,16) : '-'}</td>
+              <td class="mode-cell">${r.mode_name || r.mode || '-'}</td>
+              <td><span class="badge ${okCls}">${okTxt}</span>${errTxt}</td>
+              <td style="color:var(--text2);font-variant-numeric:tabular-nums">${r.elapsed_ms || 0}ms</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    body.innerHTML = '<div class="gen-log-empty">加载失败: ' + e.message + '</div>';
+  }
+}
+
 // ── 初始化 ──────────────────────────────────────────────────
-updateModelList();
 // 加载已有配置
 apiFetch(`${API_BASE}/api/config`).then(res => {
   if (res.ok && res.data && Object.keys(res.data).length > 0) {
     fillForm(res.data);
     document.getElementById('configForm').style.display = 'block';
+    // 记录初始语言/调性
+    _lastLang = document.querySelector('#language .pi.sel')?.dataset.v || '';
+    _lastTone = document.querySelector('#tone .pi.sel')?.dataset.v || '';
   }
 });
+// 加载生成日志
+loadGenHistory();
 </script>
 {% endblock %}

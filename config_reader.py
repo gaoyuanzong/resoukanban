@@ -28,7 +28,9 @@ DEFAULT_CFG = {
         "enabled": True,
         "max_entries": 100,
         "file": "history.json"
-    }
+    },
+    "refresh_strategy": "random",   # random / time_slot
+    "time_slot_rules": [],          # [{startHour, endHour, modes}, ...]
 }
 
 VALID_PAGES = [3, 4, 5]
@@ -138,6 +140,14 @@ class Config:
     def get_content_tone(self) -> str:
         """返回内容调性设置，默认 neutral"""
         return self._cfg.get("content_tone", "neutral")
+
+    def get_refresh_strategy(self) -> str:
+        """返回刷新策略，默认 random"""
+        return self._cfg.get("refresh_strategy", "random")
+
+    def get_time_slot_rules(self) -> list:
+        """返回时段规则列表，默认 []"""
+        return self._cfg.get("time_slot_rules", [])
 
     def get_mode_info(self, mode_id: str) -> str:
         """返回模式的中文名称"""

@@ -9,6 +9,7 @@ import calendar
 import re
 import subprocess
 import json
+from pathlib import Path
 import datetime
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
 Image.MAX_IMAGE_PIXELS = None  # 禁用解压炸弹检查
@@ -189,75 +190,24 @@ def mode_register(mid, name):
 # ================= 模式1: 历史今日照片 =================
 @mode_register("history_photo", "历史今日照片")
 def mode_history_photo():
-    """从 NAS 照片中挑选'历史上的今天'拍摄的照片"""
+    """从预缓存的历史今日照片候选中随机选取"""
     today = datetime.now()
+    cache_file = Path("/tmp/history_photo_cache.json")
 
-    def is_real_photo(path):
-        try:
-            img = Image.open(path)
-            exif = img._getexif()
-            if not exif:
-                return False
-            for tag_id, val in exif.items():
-                tag = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag in ('Make', 'Model'):
-                    return True
-            return False
-        except:
-            return False
+    if not cache_file.exists():
+        print("错误: 历史照片缓存不存在，请先运行扫描任务")
+        return
 
-    def get_shoot_date(path):
-        try:
-            img = Image.open(path)
-            exif = img._getexif()
-            if exif:
-                for tag_id, val in exif.items():
-                    tag = ExifTags.TAGS.get(tag_id, tag_id)
-                    if tag in ('DateTimeOriginal', 'DateTime') and isinstance(val, str) and len(val) >= 10:
-                        return datetime.strptime(val[:10], "%Y:%m:%d")
-        except:
-            pass
-        return None
+    with open(cache_file, encoding="utf-8") as f:
+        cache = json.load(f)
 
-    def get_day_diff(m1, d1, m2, d2):
-        try:
-            d1_d = datetime(2004, m1, d1)
-            d2_d = datetime(2004, m2, d2)
-            diff = abs((d1_d - d2_d).days)
-            return min(diff, 366 - diff)
-        except:
-            return 999
-
-    records_by_year = {}
-    all_records = []
-
-    for root, dirs, files in os.walk(NAS_PHOTO_ROOT):
-        if '@eaDir' in dirs:
-            dirs.remove('@eaDir')
-        for file in files:
-            if not file.lower().endswith(('.jpg', '.jpeg')):
-                continue
-            full_path = os.path.join(root, file)
-            if not is_real_photo(full_path):
-                continue
-            shoot_date = get_shoot_date(full_path)
-            if shoot_date is None:
-                continue
-            if shoot_date.year == today.year:
-                continue
-            rec = {'year': shoot_date.year, 'path': full_path}
-            all_records.append(rec)
-            diff = get_day_diff(today.month, today.day, shoot_date.month, shoot_date.day)
-            if diff <= 10:
-                yr = shoot_date.year
-                if yr not in records_by_year:
-                    records_by_year[yr] = []
-                records_by_year[yr].append(rec)
+    by_year = cache.get("by_year", {})
+    all_records = cache.get("all", [])
 
     chosen_record = None
-    if records_by_year:
-        chosen_year = random.choice(list(records_by_year.keys()))
-        chosen_record = random.choice(records_by_year[chosen_year])
+    if by_year:
+        chosen_year = random.choice(list(by_year.keys()))
+        chosen_record = random.choice(by_year[chosen_year])
     elif all_records:
         chosen_record = random.choice(all_records)
     else:
@@ -1299,17 +1249,36 @@ def task_news_dashboard():
 # ================= Page 3 随机转盘 =================
 
 def task_page3_random(cfg=None, history=None):
-    """从配置的可用模式中随机选一个执行"""
+    """从配置的可用模式中随机选一个执行，支持时段绑定"""
     if cfg is None:
         cfg = Config()
 
-    # 只从配置允许的模式中选择
-    available = [(mid, name, fn) for mid, name, fn in MODES if mid in cfg.page3_modes]
-    if not available:
-        print("错误: 没有可用模式")
-        return
+    # 时段匹配逻辑
+    strategy = cfg.get_refresh_strategy()
+    chosen_modes = None
+    if strategy == "time_slot":
+        rules = cfg.get_time_slot_rules()
+        hour = datetime.now().hour
+        for rule in rules:
+            if rule.get("startHour", 0) <= hour < rule.get("endHour", 0):
+                slot_modes = rule.get("modes", [])
+                if slot_modes:
+                    # 只从该时段允许的模式中选择
+                    chosen_modes = [(mid, name, fn) for mid, name, fn in MODES if mid in slot_modes]
+                    print(f"[时段] {rule.get('startHour')}:00-{rule.get('endHour')}:0 时段匹配到 {len(chosen_modes)} 个模式")
+                    break
+        if chosen_modes is None:
+            print("[时段] 当前时段无匹配规则，fallback 到随机")
 
-    chosen = random.choice(available)
+    # fallback: 从配置的可用模式中随机选
+    if not chosen_modes:
+        available = [(mid, name, fn) for mid, name, fn in MODES if mid in cfg.page3_modes]
+        if not available:
+            print("错误: 没有可用模式")
+            return
+        chosen_modes = available
+
+    chosen = random.choice(chosen_modes)
     mid, name, func = chosen
     print(f"🎲 抽中 Page 3 模式: {mid} ({name})")
     pushed = False
