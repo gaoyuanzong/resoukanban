@@ -34,21 +34,28 @@ ADCODE = "330110"
 
 NAS_PHOTO_ROOT = "/nas/admin/Photos"
 
-FONT_PATH = "font.ttf"
+FONT_DIR = Path(__file__).parent / "fonts"
+FONT_EL = str(FONT_DIR / "NotoSerifSC-ExtraLight.ttf")
+FONT_L = str(FONT_DIR / "NotoSerifSC-Light.ttf")
+FONT_R = str(FONT_DIR / "NotoSerifSC-Regular.ttf")
+FONT_B = str(FONT_DIR / "NotoSerifSC-Bold.ttf")
+FONT_EB = str(FONT_DIR / "NotoSerifSC-ExtraBold.ttf")
+FONT_LORA = str(FONT_DIR / "Lora-Regular.ttf")
+FONT_LORA_B = str(FONT_DIR / "Lora-Bold.ttf")
 try:
-    font_huge = ImageFont.truetype(FONT_PATH, 65)
-    font_title = ImageFont.truetype(FONT_PATH, 24)
-    font_item = ImageFont.truetype(FONT_PATH, 18)
-    font_small = ImageFont.truetype(FONT_PATH, 14)
-    font_tiny = ImageFont.truetype(FONT_PATH, 11)
-    font_48 = ImageFont.truetype(FONT_PATH, 48)
-    font_36 = ImageFont.truetype(FONT_PATH, 36)
+    font_huge = ImageFont.truetype(FONT_EB, 65)
+    font_title = ImageFont.truetype(FONT_B, 24)
+    font_item = ImageFont.truetype(FONT_R, 18)
+    font_small = ImageFont.truetype(FONT_L, 14)
+    font_tiny = ImageFont.truetype(FONT_EL, 11)
+    font_48 = ImageFont.truetype(FONT_EB, 48)
+    font_36 = ImageFont.truetype(FONT_B, 36)
     # 大字体（用于 Page 4/5 改善可读性）
-    font_display = ImageFont.truetype(FONT_PATH, 52)  # 主温度
-    font_large = ImageFont.truetype(FONT_PATH, 28)   # 城市/标题
-    font_mid = ImageFont.truetype(FONT_PATH, 20)      # 正文
-    font_label = ImageFont.truetype(FONT_PATH, 16)    # 标签/次要文字
-    font_forecast = ImageFont.truetype(FONT_PATH, 14) # 预报小字
+    font_display = ImageFont.truetype(FONT_EB, 52)  # 主温度
+    font_large = ImageFont.truetype(FONT_B, 28)   # 城市/标题
+    font_mid = ImageFont.truetype(FONT_R, 20)      # 正文
+    font_label = ImageFont.truetype(FONT_L, 16)    # 标签/次要文字
+    font_forecast = ImageFont.truetype(FONT_L, 14) # 预报小字
 except:
     print("错误: 找不到 font.ttf")
     exit(1)
@@ -244,7 +251,7 @@ def mode_history_photo():
     draw = ImageDraw.Draw(img)
     date_text = f"{year}年{today.month}月{today.day}日"
     try:
-        font_date = ImageFont.truetype(FONT_PATH, 14)
+        font_date = ImageFont.truetype(FONT_L, 14)
     except:
         font_date = font_small
     bbox = draw.textbbox((0, 0), date_text, font=font_date)
@@ -320,7 +327,7 @@ def mode_countdown():
     draw.text((200, 55), name, font=font_title, fill=0, anchor="mt")
 
     num_text = str(diff)
-    font_num = ImageFont.truetype(FONT_PATH, 72)
+    font_num = ImageFont.truetype(FONT_EB, 72)
     bbox = draw.textbbox((0, 0), num_text, font=font_num)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
@@ -350,7 +357,7 @@ def mode_year_progress():
     draw.text((200, 30), f"{today.year}年进度", font=font_title, fill=0, anchor="mt")
 
     pct_str = f"{pct:.1f}%"
-    font_big = ImageFont.truetype(FONT_PATH, 56)
+    font_big = ImageFont.truetype(FONT_EB, 56)
     bbox = draw.textbbox((0, 0), pct_str, font=font_big)
     tw = bbox[2] - bbox[0]
     draw.text((200, 90), pct_str, font=font_big, fill=0, anchor="mt")
