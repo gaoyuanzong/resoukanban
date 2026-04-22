@@ -186,7 +186,8 @@ async function loadStats() {
   const res = await apiFetch(`${API_BASE}/api/stats`);
   if (!res.ok || !res.data) return;
 
-  const d = res.data;
+  const d = res.data.data;
+  if (!d) return;
   document.getElementById('statDevices').textContent = d.devices ?? '—';
   document.getElementById('statRenders').textContent = d.renders ?? '—';
   document.getElementById('statCacheRate').textContent = (d.cache_rate ?? 0) + '%';
